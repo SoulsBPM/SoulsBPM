@@ -1,5 +1,6 @@
-libs/
+.env
 __pycache__/
-data/cache_fontes.db
-data/soulsbpm.db
 *.pyc
+data/*.db
+.venv/
+venv/

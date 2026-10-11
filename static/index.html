@@ -27,6 +27,7 @@ document.querySelector('meta[name="theme-color"]').setAttribute("content",t==="c
     <button class="tab" id="tab-buscar" data-tab="buscar"><span class="ico" data-i="search"></span><span class="tab-t">Buscar</span></button>
     <button class="tab" id="tab-playlists" data-tab="playlists"><span class="ico" data-i="list"></span><span class="tab-t">Playlists</span></button>
     <button class="tab" id="tab-priv" data-tab="priv"><span class="ico" data-i="shield"></span><span class="tab-t">Privacidade</span></button>
+    <button class="tab" id="tab-conta" type="button"><span class="ico" data-i="user"></span><span class="tab-t">Entrar</span></button>
   </nav>
   <button class="tema-btn tema-topo tema-fixo" id="tab-tema" type="button"></button>
   <main class="tela" id="app" aria-live="polite"></main>
@@ -59,7 +60,7 @@ document.querySelector('meta[name="theme-color"]').setAttribute("content",t==="c
     <button class="btn btn-sec" id="conf-ok" type="button"></button>
   </div>
 </dialog>
-<script>fetch("/api/health").then(r => r.json()).then(h => { if (h.ao_vivo) document.getElementById("credito").hidden = false; }).catch(() => {});</script>
+<script>fetch("/api/health").then(r => r.json()).then(h => { if (h.ao_vivo) { document.getElementById("credito").hidden = false; document.documentElement.dataset.aovivo = "1"; } }).catch(() => {});</script>
 <script src="/static/app.js"></script>
 </body>
 </html>

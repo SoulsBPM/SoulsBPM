@@ -10,6 +10,7 @@ busca de uma vibe nova é a mais lenta (consultas por faixa); depois o cache ace
 """
 import hashlib
 import json
+import logging
 import re
 import time
 import unicodedata
@@ -17,10 +18,12 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, wait
+from difflib import SequenceMatcher
 
 from .fontes import FonteErro, montar_faixa
 
 LASTFM_URL = "https://ws.audioscrobbler.com/2.0/"
+log = logging.getLogger("soulsbpm.aovivo")
 
 # tags do app → tags do Last.fm (inglês; ajuste livre, é só um dicionário)
 TAG_LASTFM = {
@@ -88,6 +91,43 @@ class LastFm:
         return saida
 
 
+    def _chamar(self, metodo, **params):
+        url = LASTFM_URL + "?" + urllib.parse.urlencode({"method": metodo, **params, "api_key": self.api_key, "format": "json"})
+        time.sleep(self.pausa)
+        try:
+            r = self._http(url)
+        except urllib.error.HTTPError as e:
+            raise FonteErro(f"Last.fm respondeu HTTP {e.code}.")
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
+            raise FonteErro(f"Falha de rede ao consultar o Last.fm: {e}")
+        if isinstance(r, dict) and r.get("error"):
+            if r["error"] in (10, 26):
+                raise FonteErro("Chave do Last.fm recusada.")
+            return {}
+        return r if isinstance(r, dict) else {}
+
+    @staticmethod
+    def _lista(bloco, chave):
+        v = bloco.get(chave) if isinstance(bloco, dict) else None
+        if isinstance(v, dict):                                 # a API devolve objeto quando há só um item
+            v = [v]
+        return [x for x in (v or []) if isinstance(x, dict)]
+
+    def buscar_artista(self, nome):
+        """Nome oficial do artista mais parecido com o texto (None se não achar)."""
+        r = self._chamar("artist.search", artist=nome, limit=1)
+        achados = self._lista((r.get("results") or {}).get("artistmatches"), "artist")
+        return achados[0].get("name") if achados and achados[0].get("name") else None
+
+    def top_tracks_artista(self, artista, limite=15):
+        r = self._chamar("artist.gettoptracks", artist=artista, limit=limite, autocorrect=1)
+        return [(artista, t["name"]) for t in self._lista(r.get("toptracks"), "track") if t.get("name")]
+
+    def artistas_similares(self, artista, limite=4):
+        r = self._chamar("artist.getsimilar", artist=artista, limit=limite, autocorrect=1)
+        return [a["name"] for a in self._lista(r.get("similarartists"), "artist") if a.get("name")]
+
+
 class AoVivo:
     """Provedor de faixas reais para o Motor. `candidatas(interp)` devolve faixas novas prontas para uso."""
 
@@ -122,6 +162,8 @@ class AoVivo:
             return []
         por_faixa, ordem = {}, []                 # (artista,titulo) → dados; intercala as tags para variar
         listas = [(t, self.lastfm.top_tracks(t[0], self.por_tag)) for t in tags]
+        for (lf, _, _), faixas in listas:
+            log.info("Last.fm: tag %r → %d faixas", lf, len(faixas))
         for i in range(self.por_tag):
             for (lf, tags_app, gens), faixas in listas:
                 if i < len(faixas):
@@ -132,20 +174,56 @@ class AoVivo:
                     d = por_faixa[chave]
                     d["tags"] += [t for t in tags_app if t not in d["tags"]]
                     d["generos"] += [g for g in gens if g not in d["generos"]]
-        ordem = ordem[: self.max_faixas]
+        return self._resolver(ordem[: self.max_faixas], por_faixa)
+
+    def _resolver(self, ordem, por_faixa):
+        """BPM e tom de cada (artista, título) da lista, em paralelo e com cache. Devolve as faixas que tiveram dados."""
         futuros = {self.pool.submit(self._enriquecer, a, t, por_faixa[(a, t)]): (a, t) for a, t in ordem}
-        feitos, _ = wait(list(futuros), timeout=self.espera)   # o resto segue em segundo plano e fica no cache
-        novas = []
+        feitos, pendentes = wait(list(futuros), timeout=self.espera)   # o resto segue em segundo plano e fica no cache
+        novas, erros, sem_dados = [], [], 0
         for f in feitos:
             try:
                 r = f.result()
-            except FonteErro:
+            except FonteErro as e:
+                erros.append(e)
                 continue
             if r:
                 novas.append(r)
+            else:
+                sem_dados += 1
+        log.info("GetSongBPM: %d com BPM/tom, %d sem dados, %d erros, %d ainda em andamento (de %d faixas)",
+                 len(novas), sem_dados, len(erros), len(pendentes), len(ordem))
+        if erros:
+            log.warning("GetSongBPM: %s", erros[0])
+        if not novas and erros:
+            raise erros[0]                    # nada deu certo por causa da fonte: o app mostra o motivo real
         pos = {k: i for i, k in enumerate(ordem)}
         novas.sort(key=lambda x: pos[(x["artista"], x["titulo"])])
         return novas
+
+    def candidatas_artista(self, nome, estrito=False, por_artista=15, similares=4, por_similar=5):
+        """Busca por artista: (nome oficial, {id: pontos}, faixas) ou None. As músicas do artista valem 1,0 e as de
+        artistas parecidos 0,6. Com estrito=True (frase solta, sem "tipo X"), só aceita nome quase igual ao digitado."""
+        oficial = self.lastfm.buscar_artista(nome)
+        if not oficial:
+            return None
+        if estrito and SequenceMatcher(None, _slug(nome), _slug(oficial)).ratio() < 0.8:
+            return None
+        pesos, ordem, por_faixa = {}, [], {}
+        def junta(faixas, peso):
+            for chave in faixas:
+                if chave not in por_faixa:
+                    por_faixa[chave] = {"tags": [], "generos": []}
+                    ordem.append(chave)
+                    pesos[chave] = peso
+        junta(self.lastfm.top_tracks_artista(oficial, por_artista), 1.0)
+        for outro in self.lastfm.artistas_similares(oficial, similares):
+            junta(self.lastfm.top_tracks_artista(outro, por_similar), 0.6)
+        if not ordem:
+            return None
+        faixas = self._resolver(ordem[: self.max_faixas + 12], por_faixa)
+        pontos = {f["id"]: pesos[(f["artista"], f["titulo"])] for f in faixas}
+        return oficial, pontos, faixas
 
     def _enriquecer(self, artista, titulo, d):
         dados = self.bpm.buscar(artista, titulo)

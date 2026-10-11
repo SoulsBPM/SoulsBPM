@@ -170,6 +170,8 @@ class GetSongBPM:
         except (TypeError, ValueError):
             return None
         tom = para_camelot(item.get("key_of"), item.get("open_key"))
+        if not tom and isinstance(item.get("camelot"), str) and re.fullmatch(r"(1[0-2]|[1-9])[AB]", item["camelot"].strip().upper()):
+            tom = item["camelot"].strip().upper()
         if not tom or not 40 <= bpm <= 250:
             return None
         out = {"bpm": round(bpm), "tom": tom}

@@ -42,8 +42,11 @@ ANTES DE COMEÇAR
 6) USAR O APP
 - Clique em "Pode lembrar".
 - Digite: música calma para estudar à noite  -> Buscar
-- Clique em "Tocar" numa faixa (entra no Modo DJ).
+- Ou digite um artista: tipo Calvin Harris
+- Clique em "Criar sequência" numa faixa (entra no Modo DJ).
+- Clique em "Ouvir" > Spotify ou YouTube para abrir a faixa no serviço, em outra aba (nos resultados, no Modo DJ e nas playlists).
 - Aceitar = segue a sugestão (dá para Desfazer aceite logo em seguida)
+- Voltar = volta à faixa anterior, tenha ela saído por Aceitar ou por Pular (a que tocava vira a sugestão; voltar a uma pulada desfaz o pulo no perfil)
 - Trocar sugestão / Pular = rejeita (a IA aprende)
 - Curtir = reforça o gosto (tocar de novo em Curtir descurte)
 - Ligue o interruptor "Técnico" (topo) para ver BPM, tom e energia.
@@ -55,13 +58,13 @@ ANTES DE COMEÇAR
 
 8) RODAR OS TESTES (opcional)
    python -m unittest discover -s tests -t .
-- Deve aparecer "OK" no final (107 testes).
+- Deve aparecer "OK" no final (108 testes).
 
 Resumo:
 ```bash
 pip install -r requirements.txt     # só o Flask
 python app.py                       # http://localhost:5000
-python -m unittest discover -s tests -t .   # 107 testes
+python -m unittest discover -s tests -t .   # 108 testes
 ```
 
 Variáveis opcionais: `PORT` (padrão 5000) e `SOULSBPM_DB` (caminho do SQLite, padrão `data/soulsbpm.db`).
@@ -85,7 +88,7 @@ Variáveis opcionais: `PORT` (padrão 5000) e `SOULSBPM_DB` (caminho do SQLite, 
 | Salvar sequência, link para exportar, reabrir e continuar playlist | `engine.salvar`, `/p/<id>` | 3 (evento 4), 6 |
 | Grafo global só com **pares de faixas** | `store.py` (tabela `graph`) | 5 (5) |
 | LGPD: consentimento, ver o que foi aprendido, zerar perfil, apagar histórico | `app.py`, `static/app.js` | 5 (5) |
-| Só metadados, nenhum áudio | `data/catalog.json` | 2, 5 |
+| Só metadados, nenhum áudio | `soulsbpm/aovivo.py` | 2, 5 |
 
 ### API
 
@@ -95,6 +98,7 @@ Variáveis opcionais: `PORT` (padrão 5000) e `SOULSBPM_DB` (caminho do SQLite, 
 | `POST /api/session/<id>/play` `{track_id}` | Entra no Modo DJ e sugere a próxima |
 | `POST /api/session/<id>/accept` | Aceita a sugestão |
 | `POST /api/session/<id>/undo-accept` | Desfaz o último aceite (a faixa volta a ser a sugestão) |
+| `POST /api/session/<id>/back` | Volta à faixa anterior (aceite ou pulo); a que tocava vira a sugestão e o pulo, se houve, é desfeito no perfil |
 | `POST /api/session/<id>/skip` `{target: atual\|sugestao, elapsed_fraction}` | Pula e troca na hora |
 | `POST /api/session/<id>/bpm` `{delta}` ou `{target}` ou `{auto: true}` | Define/ajusta o BPM alvo (50–200) ou volta ao automático; devolve nova sugestão |
 | `POST /api/session/<id>/like` (curtir; chamar de novo descurte) · `/adjust` `{direction}` · `/save` `{title, tags}` | Curtir, ajustar a vibe, salvar |
@@ -112,7 +116,7 @@ alvo, a faixa de ±5% onde a próxima troca soa natural e o ponto que a IA suger
 coloridos da roda de Camelot, a energia como medidor e os resultados como uma tabela de biblioteca.
 
 **Responsiva:** no celular é uma coluna única com abas embaixo (Buscar · Playlists · Privacidade) e os botões
-Pular / Curtir / Aceitar fixos no rodapé do Modo DJ; no PC (a partir de 900 px) o
+Voltar / Pular / Curtir / Aceitar fixos no rodapé do Modo DJ; no PC (a partir de 900 px) o
 Modo DJ mostra “Tocando agora” e “Próxima sugerida” lado a lado. Todas as telas internas têm o botão **Voltar**
 (Resultados → Início, Modo DJ → Resultados/Playlist, Salvar → Modo DJ, Playlist → Playlists); ao sair do Modo DJ
 com uma sequência não salva o app pede confirmação.
@@ -130,34 +134,36 @@ aparece como outra tela), o atalho **Trocar sugestão** (recusar a sugestão sem
 
 As fontes são a Barlow e a Barlow Condensed (licença SIL OFL), incluídas em `static/fonts/` para funcionar sem internet.
 
-## Músicas reais, sem lista pronta (modo ao vivo)
+## Como rodar (músicas reais)
 
-Com duas chaves gratuitas no ambiente, o app deixa de usar as 60 faixas fictícias: a pessoa descreve a vibe e ele
-busca **músicas reais** sozinho. Cada busca faz isto: interpreta a vibe → traduz para tags do **Last.fm** →
-pega as músicas populares dessas tags → consulta **BPM e tom na GetSongBPM** (com cache) → entra no Modo DJ.
-As faixas descobertas ficam guardadas no banco (só metadados), então playlists salvas reabrem depois.
+O SoulsBPM usa só músicas reais: a pessoa descreve a vibe e ele busca sozinho. Cada busca interpreta a vibe →
+traduz para tags do **Last.fm** → pega as músicas populares dessas tags → consulta **BPM e tom na GetSongBPM**
+(com cache) → entra no Modo DJ. As faixas descobertas ficam guardadas no banco (só metadados), então playlists
+salvas reabrem depois. **Não existe mais catálogo de amostra**: sem as chaves o app não abre e explica o motivo.
 
 1. Chave do Last.fm: https://www.last.fm/api/account/create (gratuita).
 2. Chave da GetSongBPM: https://getsongbpm.com/api (gratuita; exige link visível para getsongbpm.com, que o app
-   mostra em *Privacidade* quando o modo ao vivo está ligado).
-3. Rodar:
-   ```bash
-   export LASTFM_API_KEY=sua_chave_lastfm          # Windows (cmd): set LASTFM_API_KEY=...
-   export GETSONGBPM_API_KEY=sua_chave_getsongbpm  # Windows (cmd): set GETSONGBPM_API_KEY=...
-   python app.py
-   ```
-   Sem as duas chaves o app continua no catálogo de amostra. `/api/health` mostra `"ao_vivo": true/false`.
+   mostra em *Privacidade*).
+3. Copie `.env.exemplo` para `.env` (mesma pasta do `app.py`) e cole as duas chaves, sem aspas.
+4. Rode `python app.py` e abra http://localhost:5000. (Também funciona com variáveis de ambiente:
+   `LASTFM_API_KEY` e `GETSONGBPM_API_KEY`.)
+
+`/api/health` mostra `"ao_vivo": true`.
 
 Como funciona na prática e limites:
 - A **primeira busca de uma vibe nova é a mais lenta** (uma consulta de BPM por faixa, até ~10 s; o que não
   terminar continua em segundo plano e aparece na próxima busca). Depois o cache deixa rápido.
 - O Modo DJ sugere a partir das faixas já descobertas: quanto mais buscas, mais rico o "repertório".
 - Last.fm não traz BPM nem duração e a GetSongBPM não traz energia: a **energia é estimada** (BPM, gênero e, quando a API traz, danceability e acousticness), a
-  duração fica em 200 s e faixas sem BPM/tom na GetSongBPM são descartadas. A reprodução continua simulada.
+  duração fica em 200 s e faixas sem BPM/tom na GetSongBPM são descartadas. O app não toca áudio (use o botão Ouvir).
 - A tradução vibe → tag do Last.fm está em `soulsbpm/aovivo.py` (`TAG_LASTFM`, `GENERO_LASTFM`) e pode ser ajustada.
 - A GetSongBPM limita a 3000 consultas/hora (acima disso bloqueia a chave por 1 h); o app para em 2500/h e passa a usar só o cache.
-- Ainda não busca por **nome de música ou artista** (só por vibe e gênero).
-- Código testado só com respostas simuladas; o formato real das duas APIs deve ser conferido na primeira execução.
+- **Busca por artista**: digite "tipo Calvin Harris", "músicas do Coldplay" ou só o nome. O app confirma o artista
+  no Last.fm, pega as músicas mais populares dele e de até 4 artistas parecidos, e o Modo DJ ordena por BPM e tom.
+  Frase solta só vira artista se o nome bater quase igual no Last.fm. Ainda não busca por **nome de música**.
+- Se der "Nenhuma faixa", o terminal mostra o motivo (Last.fm, GetSongBPM, chave recusada…) e a tela também. Para
+  testar as duas chaves separadamente: `python tools/diagnostico.py` (PowerShell: `$env:LASTFM_API_KEY="..."`).
+- Código testado só com respostas simuladas; o formato real das duas APIs deve ser conferido na primeira execução (se algo falhar, rode `python tools/diagnostico.py` e veja o terminal).
 
 ### Alternativa: catálogo próprio a partir de uma lista (opcional)
 
@@ -165,23 +171,47 @@ Se preferir controlar as músicas, `python tools/importar_catalogo.py --entrada 
 `data/minhas_faixas.exemplo.csv`) gera `data/catalog.real.json` só com a GetSongBPM (chave `GETSONGBPM_API_KEY`), e
 `SOULSBPM_CATALOG=data/catalog.real.json python app.py` usa esse arquivo.
 
+## Publicar na internet (link público)
+
+**Login.** O app tem uma página própria de login em `/login` (`static/login.html`, `.css`, `.js`), separada do app e adaptada a celular, tablet e PC. Ela oferece *Entrar* e *Criar conta* (usuário + senha, sem e-mail). Quem não está logado (e não escolheu *Continuar sem conta*) é levado para `/login`; depois do login volta para `/`. A senha é guardada só como hash
+scrypt com sal; a sessão é um cookie `HttpOnly` de 30 dias (no banco fica só o hash do token). Com login, perfil, histórico
+e playlists ficam na conta e acompanham a pessoa em qualquer aparelho; o navegador não consegue mais "escolher" de quem
+são os dados. Ao criar a conta, o histórico anônimo do navegador vai junto. Há no máximo 10 tentativas de login/cadastro
+por minuto por IP (`SOULSBPM_LOGINS_POR_MIN`). Por padrão há também o botão *Continuar sem conta* (modo anônimo, como antes);
+para **exigir** conta em tudo, defina `SOULSBPM_EXIGIR_LOGIN=1` (links públicos de playlist continuam abertos).
+**Playlists só existem em conta:** quem está sem conta pode buscar e usar o Modo DJ, mas não salva nem lista playlists (o servidor recusa com 403 e o app convida a entrar). Playlists antigas feitas sem conta passam para a conta ao criá-la no mesmo navegador. Links públicos de playlist continuam abertos para qualquer pessoa. Não há recuperação de senha (não há e-mail): quem esquecer a senha cria outra conta.
+
+1. **Hospedagem com disco persistente** (o banco e o cache são SQLite). Em hospedagem com disco que apaga a cada
+   reinício, as playlists e links compartilhados somem. Aponte `SOULSBPM_DATA` para a pasta do disco persistente.
+2. **Variáveis de ambiente** (nunca suba o arquivo `.env` para o Git; o `.gitignore` já o ignora):
+   `LASTFM_API_KEY`, `GETSONGBPM_API_KEY`, `SOULSBPM_DATA=/caminho/do/disco`, `SOULSBPM_EXIGIR_LOGIN=1` (opcional), `SOULSBPM_PROXY=1` (HTTPS da hospedagem
+   na frente; use o nº de proxies) e, se quiser, `SOULSBPM_BUSCAS_POR_MIN` (padrão 20 buscas/min por IP).
+3. **Comandos:** instalar com `pip install -r requirements.txt` e iniciar com `python app.py` (usa o servidor de produção
+   waitress; a hospedagem define `PORT`). **Uma instância só.**
+4. **GetSongBPM:** cadastre o endereço público do app no painel deles (o link de retorno é obrigatório; sem ele a conta
+   é suspensa). O app mostra o crédito na tela inicial e em *Privacidade*.
+5. **Conferir:** `https://SEU-LINK/api/health` deve mostrar `"ao_vivo": true`. No terminal da hospedagem,
+   `python tools/diagnostico.py` testa as duas chaves.
+6. A cota da GetSongBPM (3000 consultas/h) é de **todos** os visitantes juntos; o app para em 2500/h e passa a usar só o cache.
+
 ## Limitações do MVP (o que **não** foi feito)
 
-- **Sem Spotify/Last.fm.** O documento 5 já aponta que o Spotify não libera mais audio features para apps
-  novos e que o Last.fm não fornece BPM nem tom. O MVP usa um **catálogo local de amostra** (60 faixas e artistas
-  **fictícios**, gerado por `tools/make_catalog.py`). Trocar por uma fonte real é implementar a camada de
-  integrações com cache; o formato da faixa já é o necessário (`bpm`, `tom`, `energia`, `generos`, `tags`).
+- **Sem Spotify (API).** O Spotify não libera mais audio features para apps novos e o Last.fm não fornece BPM nem tom; por isso o BPM e o tom vêm da GetSongBPM.
 - **MusicFinder por léxico em português**, não por um modelo de linguagem. Entende um vocabulário limitado
   (estudar, treinar, festa, triste, jazz, noite…). Está isolado em `interpretar()` para ser trocado por uma API
   de linguagem natural sem mexer no resto.
-- **Reprodução simulada** (sem áudio, por direitos autorais). A barra de progresso é acelerada só para
-  demonstrar a diferença entre pular antes e depois da metade.
+- **O app não toca áudio** (direitos autorais). Ele monta a ordem; o botão **Ouvir** abre a busca "artista +
+  título" no Spotify ou no YouTube, em outra aba, sem chave de API (abre a *busca*, não a faixa exata). Como não há
+  player, o "Pular" estima quanto da faixa a pessoa ouviu pelo tempo real desde que ela virou a faixa atual
+  (duração padrão de 200 s): pular antes da metade ensina que não gostou, depois da metade, que gostou em parte.
 - **Sessões em memória** (o documento 5 sugere Redis) e **SQLite** no lugar do PostgreSQL. Reiniciar o
   servidor encerra as sessões abertas; perfis, histórico e playlists continuam salvos.
-- O usuário é identificado por um código aleatório no navegador, só depois do consentimento. Não há login:
-  quem tiver o código de outra pessoa lê o perfil e o histórico dela.
-- Sessões em memória não expiram (acumulam com o uso) e `app.py` escuta em `0.0.0.0`, então qualquer pessoa na
-  mesma rede acessa o app. Para produção, usar login, expiração de sessão e `127.0.0.1`/proxy.
+- Sem login (modo *Continuar sem conta*), o usuário é um código aleatório no navegador, só depois do consentimento:
+  quem tiver esse código lê o perfil e o histórico. Com conta isso não acontece (o código de uma conta não vale sem a senha).
+- Sem recuperação de senha, sem confirmação de e-mail e sem exclusão de conta pela tela (por enquanto).
+- As sessões ficam em memória e expiram após 3 h paradas (máx. 5000). Por isso rode **uma instância só**.
+- No seu PC o app escuta só em `127.0.0.1`; na hospedagem (que define `PORT`) escuta em todas as interfaces.
+  Para acessar do celular na mesma rede, rode com `HOST=0.0.0.0`.
 
 ## IA do DJ e BPM alvo
 
@@ -196,7 +226,7 @@ alvo) e os pesos passam a `0,08 vibe + 0,24 BPM + 0,15 tom + 0,08 energia + 0,45
 Os pesos foram escolhidos numa varredura em 6 vibes, subindo e descendo: com `W_RUMO = 0,45` nenhum passo foi na
 direção errada, a compatibilidade média ficou em ~71% (a fórmula original dá ~72%) e as transições “arriscadas”
 caíram de 18 para 9 em 60. É um recomendador por regras e pontuação, **não** um modelo de linguagem; a camada
-`dj.rank_next` pode ser trocada por um modelo treinado ou uma API sem mexer no resto. Com só 60 faixas fictícias
+`dj.rank_next` pode ser trocada por um modelo treinado ou uma API sem mexer no resto. Com poucas faixas descobertas
 há “buracos” de BPM, então a IA às vezes precisa de uma faixa de transição antes de subir mais.
 
 ## Calibração
@@ -208,7 +238,7 @@ compatibilidade técnica muito alta; o teste `test_aprendizado_muda_as_proximas_
 ## Roteiro de demonstração (3 minutos)
 
 1. Aceitar o consentimento e buscar **“música calma para estudar à noite”**. Mostrar a frase interpretada.
-2. Tocar a primeira faixa e ligar o **Modo técnico**: BPM, tom e a % de compatibilidade da próxima.
+2. Montar o set a partir da primeira faixa e ligar o **Modo técnico**: BPM, tom e a % de compatibilidade da próxima.
 3. **Aceitar** duas vezes e **Curtir** uma faixa.
 4. Clicar em **Trocar sugestão** três vezes: aparecem os atalhos “mais calma / mais animada”.
 5. **Salvar sequência**, copiar o link e abri-lo em outra aba.

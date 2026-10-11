@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="dark light">
+<meta name="theme-color" content="#0e0d1c">
+<title>Entrar · SoulsBPM</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237a66ff'/%3E%3Cg stroke='%230e0d1c' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M8 14v4M12 10v12M16 7v18M20 11v10M24 14v4'/%3E%3C/g%3E%3C/svg%3E">
+<script>
+/* mesmo tema do app (preferência salva ou a do sistema), aplicado antes de pintar */
+(function(){var t=null;try{t=localStorage.getItem("souls_tema")}catch(e){}
+if(t!=="claro"&&t!=="escuro")t=matchMedia("(prefers-color-scheme: light)").matches?"claro":"escuro";
+document.documentElement.dataset.tema=t;
+document.querySelector('meta[name="theme-color"]').setAttribute("content",t==="claro"?"#f4f3fa":"#0e0d1c");})();
+</script>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/login.css">
+</head>
+<body class="lg">
+<div class="lg-wrap">
+  <aside class="lg-marca">
+    <a class="lg-logo" href="/" aria-label="SoulsBPM">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#7a66ff"/><g stroke="#0e0d1c" stroke-width="2.6" stroke-linecap="round"><path d="M8 14v4M12 10v12M16 7v18M20 11v10M24 14v4"/></g></svg>
+      <span>SoulsBPM</span>
+    </a>
+    <div class="lg-pitch">
+      <h2>A próxima faixa certa, no BPM certo.</h2>
+      <p>Descreva a vibe e a IA monta o set: BPM dentro de ±5% e tons compatíveis a cada troca.</p>
+      <ul>
+        <li>Playlists salvas na sua conta</li>
+        <li>O app aprende o que você curte e pula</li>
+        <li>Funciona no celular e no computador</li>
+      </ul>
+      <div class="lg-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+  </aside>
+
+  <main class="lg-lado">
+    <button class="lg-tema" id="lg-tema" type="button"></button>
+    <section class="lg-card" aria-labelledby="lg-titulo">
+      <h1 id="lg-titulo">Entrar</h1>
+      <p class="mudo" id="lg-sub"></p>
+
+      <div class="lg-abas" role="tablist" aria-label="Entrar ou criar conta">
+        <button type="button" role="tab" id="aba-entrar" data-m="entrar" aria-selected="true">Entrar</button>
+        <button type="button" role="tab" id="aba-criar" data-m="criar" aria-selected="false">Criar conta</button>
+      </div>
+
+      <form id="f-login" novalidate>
+        <label for="lg-nome">Usuário</label>
+        <input type="text" id="lg-nome" name="username" autocomplete="username" autocapitalize="none" autocorrect="off"
+               spellcheck="false" inputmode="text" enterkeyhint="next" maxlength="30" required>
+        <label for="lg-senha">Senha</label>
+        <div class="lg-senha">
+          <input type="password" id="lg-senha" name="password" autocomplete="current-password" enterkeyhint="go" maxlength="128" required>
+          <button type="button" id="lg-ver" aria-pressed="false" aria-label="Mostrar a senha">Mostrar</button>
+        </div>
+        <p class="mudo lg-dica" id="lg-dica" hidden>De 8 a 128 caracteres.</p>
+        <div id="lg-erro" role="alert" aria-live="assertive"></div>
+        <button class="btn btn-pri cheio" id="lg-ok" type="submit">Entrar</button>
+      </form>
+
+      <div class="lg-ou" id="lg-ou"><span>ou</span></div>
+      <button class="btn btn-sec cheio" id="lg-visitante" type="button">Continuar sem conta</button>
+      <p class="mudo lg-nota" id="lg-nota"></p>
+    </section>
+  </main>
+</div>
+<script src="/static/login.js"></script>
+</body>
+</html>

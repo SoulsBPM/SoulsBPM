@@ -1,0 +1,69 @@
+/* Página de login (/login): separada do app. Celular em coluna única; a partir de 900 px, duas colunas. */
+body.lg{margin:0;min-height:100vh;min-height:100dvh;background:var(--noite);color:var(--texto);font:400 16px/1.45 var(--fonte);-webkit-text-size-adjust:100%}
+.lg-wrap{position:relative;min-height:100vh;min-height:100dvh;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto 1fr;
+  padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0)}
+
+/* topo (celular): só a marca */
+.lg-marca{padding:18px 20px 0}
+.lg-logo{display:inline-flex;align-items:center;gap:10px;color:var(--texto);text-decoration:none;font:700 26px/1 var(--num);letter-spacing:.01em}   /* mesmo tamanho da logo do menu do app */
+.lg-logo svg{width:30px;height:30px;flex:none}
+.lg-pitch{display:none}
+
+.lg-lado{display:flex;flex-direction:column;justify-content:flex-start;padding:20px 20px 32px}
+.lg-card{width:100%;max-width:440px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.lg-card h1{font-size:30px;line-height:1.15;margin-top:4px}
+.lg-tema{position:absolute;z-index:2;top:calc(env(safe-area-inset-top,0px) + 10px);right:calc(env(safe-area-inset-right,0px) + 16px);display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border-radius:var(--r-ctl);
+  border:1px solid var(--linha-forte);background:var(--painel);color:var(--texto);font-weight:600;font-size:14px}
+.lg-tema svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.lg-tema .tema-l{display:none}
+
+.lg-abas{display:flex;gap:4px;padding:4px;background:var(--painel);border:1px solid var(--linha);border-radius:var(--r-ctl)}
+.lg-abas button{flex:1;min-height:44px;border:0;border-radius:5px;background:none;color:var(--mudo);font-weight:600;font-size:16px}
+.lg-abas button[aria-selected="true"]{background:var(--painel-2);color:var(--texto);box-shadow:inset 0 0 0 1px var(--linha-forte)}
+
+#f-login{display:flex;flex-direction:column;gap:8px}
+#f-login label{font-weight:600;font-size:15px;margin-top:6px}
+#f-login input{width:100%;min-height:52px;background:var(--painel);border:1px solid var(--linha-forte);border-radius:var(--r-painel);
+  padding:0 16px;font:inherit;font-size:17px;color:var(--texto);resize:none}      /* 17 px: o Android/iOS não dá zoom ao focar */
+#f-login input:focus{outline:none;border-color:var(--indigo);box-shadow:0 0 0 3px #7a66ff40}
+.lg-senha{position:relative}
+.lg-senha input{padding-right:92px}
+.lg-senha button{position:absolute;top:50%;right:6px;transform:translateY(-50%);min-height:40px;padding:0 12px;border:0;border-radius:6px;
+  background:none;color:var(--indigo-claro);font-weight:600;font-size:14px}
+.lg-senha button:hover{background:var(--painel-2)}
+.lg-dica,.lg-nota{font-size:13px}
+#lg-erro:empty{display:none}
+#lg-ok{margin-top:8px;min-height:52px}
+#lg-visitante{min-height:52px}
+.lg-ou{display:flex;align-items:center;gap:12px;color:var(--apagado);font-size:13px}
+.lg-ou::before,.lg-ou::after{content:"";flex:1;height:1px;background:var(--linha)}
+.lg-nota{text-align:center}
+
+/* PC / tablet largo: marca e apresentação à esquerda, formulário à direita */
+@media (min-width:900px){
+  .lg-wrap{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);grid-template-rows:1fr}
+  .lg-marca{display:flex;flex-direction:column;justify-content:space-between;gap:32px;padding:44px 56px;
+    background:radial-gradient(120% 90% at 0% 0%,color-mix(in srgb,var(--indigo) 30%,var(--noite)),var(--noite) 70%);border-right:1px solid var(--linha)}
+  .lg-pitch{display:block;max-width:460px}
+  .lg-pitch h2{font:700 44px/1.08 var(--num);letter-spacing:.005em}
+  .lg-pitch p{margin-top:14px;color:var(--mudo);font-size:18px}
+  .lg-pitch ul{list-style:none;margin:22px 0 0;padding:0;display:grid;gap:10px}
+  .lg-pitch li{position:relative;padding-left:26px}
+  .lg-pitch li::before{content:"";position:absolute;left:0;top:.5em;width:10px;height:10px;border-radius:3px;background:var(--ambar)}
+  .lg-eq{display:flex;align-items:flex-end;gap:8px;height:72px;margin-top:34px}
+  .lg-eq i{flex:1;max-width:14px;height:100%;border-radius:4px;background:var(--indigo);opacity:.8;transform-origin:bottom;animation:lg-eq 1.6s ease-in-out infinite}
+  .lg-eq i:nth-child(2n){animation-delay:-.4s;background:var(--indigo-claro)}
+  .lg-eq i:nth-child(3n){animation-delay:-.9s;background:var(--ambar);opacity:.7}
+  .lg-eq i:nth-child(4n){animation-delay:-1.2s}
+  .lg-lado{justify-content:center;padding:48px}
+  .lg-card{margin:auto}
+  .lg-card h1{font-size:34px}
+  .lg-tema{top:20px;right:24px}
+  .lg-tema .tema-l{display:inline}
+}
+@keyframes lg-eq{0%,100%{transform:scaleY(.25)}50%{transform:scaleY(1)}}
+@media (prefers-reduced-motion:reduce){.lg-eq i{animation:none;transform:scaleY(.6)}}
+
+/* celular baixo ou com teclado aberto: tira o espaço de sobra */
+@media (max-height:560px){.lg-marca{padding-top:10px}.lg-card h1{font-size:24px}.lg-card{gap:10px}}
+@media (max-width:359px){.lg-lado{padding-inline:14px}.lg-card h1{font-size:26px}}

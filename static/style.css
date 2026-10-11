@@ -45,7 +45,7 @@ h1,h2,h3,p{margin:0}
 .app{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
 .tela{order:1;flex:1;width:100%;max-width:1200px;margin:0 auto;padding:18px 18px 20px;display:flex;flex-direction:column;gap:16px;min-width:0}
 body:not(.tecnico) .so-tec{display:none!important}
-body:not(.tecnico) .th,body:not(.tecnico) .tr{grid-template-columns:48px minmax(0,1fr) 96px}
+body:not(.tecnico) .th,body:not(.tecnico) .tr{grid-template-columns:48px minmax(0,1fr) 170px}
 
 /* menu lateral: sempre à esquerda. No PC, largo com ícone + texto; no celular, uma faixa estreita só com ícones */
 .app{flex-direction:row}
@@ -164,7 +164,7 @@ input.tag-in{width:140px;padding:7px 12px;font-size:15px;border-radius:var(--r-c
 
 /* ---------- biblioteca (resultados e playlists) ---------- */
 .tabela{display:flex;flex-direction:column}
-.th,.tr{display:grid;grid-template-columns:48px minmax(0,1fr) 70px 64px 76px 96px;align-items:center;column-gap:14px;padding:0 16px}
+.th,.tr{display:grid;grid-template-columns:48px minmax(0,1fr) 70px 64px 76px 170px;align-items:center;column-gap:14px;padding:0 16px}
 .th{min-height:38px;border-bottom:1px solid var(--linha);color:var(--apagado);font-size:14px;font-weight:600}
 .tr{min-height:72px;border-bottom:1px solid var(--linha)}
 .tr:last-child{border-bottom:0}
@@ -270,8 +270,11 @@ details.dev div{margin-top:2px;word-break:break-word}
 .transporte .btn{min-height:56px;font-size:17px;padding:0 18px}
 .transporte .btn-pri{flex:1;font-size:18px}
 .transporte .btn .ic{width:20px;height:20px}
-@media (max-width:559px){.transporte{gap:6px}.transporte .btn{min-width:0;padding:0 8px;gap:5px;font-size:15px;min-height:54px}.transporte .btn .ic{width:18px;height:18px}.transporte .rot-s{display:none}.transporte .btn-pri{flex:1 1 auto;font-size:17px}}
+.transporte .btn.so-ico.btn-pri{flex:0 0 auto;margin-left:0}   /* Curtir curtido: continua do tamanho dos outros */
+@media (max-width:559px){.transporte{gap:6px}.transporte .btn{min-width:0;padding:0 8px;gap:5px;font-size:15px;min-height:54px;flex:1 1 0}.transporte .btn .ic{width:20px;height:20px}.transporte .rot-s{display:none}.transporte .btn.so-ico{flex:0 0 52px;padding:0}.transporte .btn.so-ico.btn-pri{flex:0 0 52px}.transporte .btn-pri{flex:1.2 1 0;font-size:16px}}
 @media (min-width:900px){.transporte .btn-pri{flex:0 1 280px;margin-left:auto}}
+@media (max-width:389px){.transporte .btn{padding:0 6px;font-size:14px}.transporte .btn .ic{width:18px;height:18px}.transporte .btn.so-ico,.transporte .btn.so-ico.btn-pri{flex:0 0 46px;padding:0}.transporte .btn-pri{flex:1.1 1 0;font-size:15px}}
+@media (max-width:339px){.transporte #b-aceitar .ic{display:none}}
 
 /* salvar, playlist ---------------------------------------------------- */
 .campo-l{font-size:15px;color:var(--mudo);font-weight:500;margin-bottom:-4px}
@@ -553,3 +556,35 @@ dialog h3{padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--l
 
 /* atualização do Modo DJ sem reanimar a tela inteira (o anel e o equalizador continuam animando) */
 #app.sem-anim>*,#app.sem-anim .tr,#app.sem-anim .item{animation:none}
+
+/* botão "Ouvir": rótulo + dois ícones (Spotify, YouTube) que abrem a faixa em outra aba */
+.ouvir{display:inline-flex;align-items:center;gap:6px;margin-top:6px}
+.ouvir-t{display:inline-flex;align-items:center;gap:5px;color:var(--mudo);font-size:13px;font-weight:600;margin-right:2px}
+.ouvir-t .ic{width:15px;height:15px}
+.ouv{display:inline-grid;place-items:center;width:34px;height:34px;border:1px solid var(--linha-forte);border-radius:50%;background:var(--painel)}
+.ouv svg{width:20px;height:20px}
+.ouv:hover{background:var(--painel-2);border-color:var(--indigo-claro)}
+.ouv:focus-visible{outline:2px solid var(--indigo-claro);outline-offset:2px}
+@media (pointer:coarse){.ouv{width:40px;height:40px}.ouv svg{width:22px;height:22px}}
+
+/* resultados no celular: título com a largura toda; BPM/chave/energia e o botão ficam numa linha embaixo */
+@media (max-width:719px){
+  .tr,body:not(.tecnico) .tr{grid-template-columns:26px minmax(0,1fr) auto;grid-template-areas:"n t t" "n m b";
+    column-gap:10px;row-gap:10px;padding:14px 12px;align-items:center}
+  .tr .tx{align-items:flex-start;gap:12px}
+  .tr .tit{font-size:17px}
+  .tr .acao{justify-self:end}
+  .tr .acao .btn{padding:0 14px}
+  .tr .meta{min-width:0;flex-wrap:wrap;gap:6px 12px}
+}
+@media (max-width:359px){
+  .tr,body:not(.tecnico) .tr{grid-template-areas:"n t t" "n m m" "n b b"}
+  .tr .acao{justify-self:stretch}
+  .tr .acao .btn{width:100%}
+}
+
+/* crédito da GetSongBPM (exigido pela licença): aparece só no modo ao vivo */
+.cred-bpm{display:none}
+html[data-aovivo] .cred-bpm{display:inline}
+.rodape-nota a{color:inherit;text-decoration:underline}
+

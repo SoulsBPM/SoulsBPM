@@ -3,7 +3,7 @@ import pathlib
 import unittest
 from soulsbpm import musicfinder as mf
 
-CAT = json.loads((pathlib.Path(__file__).resolve().parent.parent / "data" / "catalog.json").read_text("utf-8"))
+CAT = json.loads((pathlib.Path(__file__).resolve().parent / "fixtures" / "catalog.json").read_text("utf-8"))
 
 
 class InterpretarTests(unittest.TestCase):

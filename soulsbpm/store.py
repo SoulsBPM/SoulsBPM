@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS playlists(id TEXT PRIMARY KEY, user_id TEXT, title TE
                                      track_ids TEXT, created_at REAL);
 CREATE TABLE IF NOT EXISTS graph(a TEXT, b TEXT, count INTEGER, PRIMARY KEY(a, b));
 CREATE TABLE IF NOT EXISTS tracks(id TEXT PRIMARY KEY, data TEXT);
+CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, nome TEXT UNIQUE COLLATE NOCASE, hash TEXT, created_at REAL);
+CREATE TABLE IF NOT EXISTS auth(token TEXT PRIMARY KEY, user_id TEXT, expires REAL);
 """
 
 

@@ -1,12 +1,13 @@
 /* SoulsBPM – console de DJ (interface). Cada tela corresponde a um estado do documento 4. */
 const $ = (s, r = document) => r.querySelector(s);
 const app = $("#app");
-const K = { uid: "souls_uid", consent: "souls_consent", tec: "souls_tec", tema: "souls_tema", menu: "souls_menu" };
+const K = { uid: "souls_uid", consent: "souls_consent", tec: "souls_tec", tema: "souls_tema", menu: "souls_menu", visitante: "souls_visitante" };
 const guarda = {
   get: k => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
+  del: k => { try { localStorage.removeItem(k); } catch {} },
 };
-const S = { clicado: null, ocupado: false, sid: null, dj: null, busca: "", tocando: null, res: null, origem: null, salvo: false, redesenha: null };
+const S = { clicado: null, ocupado: false, sid: null, dj: null, busca: "", tocando: null, res: null, origem: null, salvo: false, redesenha: null, conta: { logado: false } };
 
 /* botão clicado (captura antes dos handlers) e indicador de carregamento: o spinner só aparece se a resposta
    demorar (>150 ms), para não piscar; cliques repetidos são ignorados enquanto a ação roda */
@@ -25,6 +26,7 @@ const P = {
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   list: '<path d="M21 15V6"/><circle cx="18.5" cy="18" r="2.5"/><path d="M12 12H3M16 6H3M12 18H3"/>',
   skip: '<polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/>',
+  prev: '<polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/>',
   heart: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
   copy: '<rect x="8" y="8" width="14" height="14" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
@@ -41,8 +43,10 @@ const P = {
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
   moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
   chart: '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/>',
+  ouvir: '<path d="M3 14v-4a9 9 0 0 1 18 0v4"/><path d="M21 15a2 2 0 0 1-2 2h-1a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h3zM3 15a2 2 0 0 0 2 2h1a1 1 0 0 0 1-1v-4a1 1 0 0 0-1-1H3z"/>',
 };
 const ic = (n, cls = "ic") => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${P[n]}</svg>`;
 const LOGO = `<svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#7a66ff"/>
@@ -51,10 +55,15 @@ document.querySelectorAll("[data-i]").forEach(e => { e.innerHTML = ic(e.dataset.
 $("#side-logo").innerHTML = LOGO + '<span class="tab-t"> SoulsBPM</span>';
 
 /* ---------- utilidades ---------- */
+const logado = () => !!S.conta?.logado;
 function userId() {
+  if (logado()) return null;                                  // com login, o servidor sabe quem é pelo cookie
   if (guarda.get(K.consent) !== "sim") return null;           // sem consentimento nada é guardado
   let u = guarda.get(K.uid);
-  if (!u) { u = "u_" + Math.random().toString(36).slice(2, 12); guarda.set(K.uid, u); }
+  if (!u) {                                                   // 128 bits aleatórios: o código funciona como senha de acesso aos seus dados
+    const b = crypto.getRandomValues(new Uint8Array(16));
+    u = "u_" + Array.from(b, x => x.toString(16).padStart(2, "0")).join(""); guarda.set(K.uid, u);
+  }
   return u;
 }
 async function api(method, url, body) {
@@ -63,6 +72,12 @@ async function api(method, url, body) {
   const r = await fetch(url + q, { method, headers: { "Content-Type": "application/json" },
     body: sem ? undefined : JSON.stringify({ user_id: userId(), ...(body || {}) }) });
   const j = await r.json().catch(() => ({}));
+  const expirou = logado() && r.headers.get("X-Souls-Logado") === "0";
+  if (expirou || (r.status === 401 && j.login)) {             // sessão acabou: volta para a tela de login
+    S.conta = { logado: false, exigir_login: S.conta?.exigir_login || !!j.login };
+    atualizaMenuConta(); location.replace("/login?expirou=1");
+    throw new Error(j.erro || "Entre na sua conta para continuar.");
+  }
   if (!r.ok) throw new Error(j.erro || "Algo deu errado. Tente de novo.");
   return j;
 }
@@ -70,7 +85,7 @@ const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": 
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 const pct = (a, b) => { const d = (b - a) / a * 100; return (d >= 0 ? "+" : "−") + Math.abs(d).toFixed(1).replace(".", ",") + "%"; };
 const paraTop = () => window.scrollTo({ top: 0 });
-function pararReproducao() { if (S.tocando) { clearInterval(S.tocando.t); S.tocando = null; } }
+function pararReproducao() { S.tocando = null; }
 function setTecnico(on, salvar = true) {
   document.body.classList.toggle("tecnico", on);
   if (salvar) guarda.set(K.tec, on ? "1" : "0");
@@ -138,6 +153,19 @@ async function saidaOk() {
   if (!(d && d.sequencia.length >= 2 && !S.salvo)) return true;
   return confirma("Sair do Modo DJ?", "A sequência que você montou ainda não foi salva e vai se perder.",
                   "Sair sem salvar", "Continuar no Modo DJ");
+}
+
+
+/* botão "Ouvir": o app não toca áudio; abre a busca da faixa (artista + título) no Spotify ou no YouTube, em outra aba */
+const LOGO_SP = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#1db954"/><path d="M6.2 9.2c3.8-1.1 8.2-.8 11.6 1.2M6.9 12.4c3.2-.9 6.8-.6 9.6 1M7.6 15.4c2.5-.6 5.2-.4 7.4.8" fill="none" stroke="#0e0d1c" stroke-width="1.7" stroke-linecap="round"/></svg>';
+const LOGO_YT = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="4.5" width="22" height="15" rx="4.5" fill="#ff3b30"/><path d="m10 9 5.2 3-5.2 3z" fill="#fff"/></svg>';
+function ouvir(f) {
+  const q = encodeURIComponent(`${f.artista} ${f.titulo}`.trim());
+  const nome = `${f.titulo}, ${f.artista}`;
+  const link = (cls, rot, logo, url) => `<a class="ouv ${cls}" href="${url}" target="_blank" rel="noopener noreferrer"
+    aria-label="Ouvir ${esc(nome)} no ${rot} (abre em outra aba)" title="Ouvir no ${rot}">${logo}</a>`;
+  return `<span class="ouvir" role="group" aria-label="Ouvir ${esc(nome)}"><span class="ouvir-t">${ic("ouvir")}Ouvir</span>${
+    link("sp", "Spotify", LOGO_SP, "https://open.spotify.com/search/" + q)}${link("yt", "YouTube", LOGO_YT, "https://www.youtube.com/results?search_query=" + q)}</span>`;
 }
 
 /* ---------- peças visuais ---------- */
@@ -245,12 +273,12 @@ async function telaInicio(msg, exemplos) {
   pararReproducao(); abas("buscar"); S.sid = null; S.dj = null; S.res = null; S.salvo = false;
   let recentes = [];
   try { recentes = (await api("GET", "/api/recent")).buscas; } catch {}
-  const sugestoes = exemplos?.length ? exemplos : (recentes.length ? recentes : ["estudar à noite", "treino", "festa", "jantar romântico"]);
+  const sugestoes = exemplos?.length ? exemplos : (recentes.length ? recentes : ["estudar à noite", "treino", "festa", "tipo Calvin Harris"]);
   app.innerHTML = `
     <div class="hero"><h1>Qual é a <span class="vibe">vibe</span> do seu momento?</h1>
-      <p>Descreva o clima. A IA escolhe por onde começar e conduz o BPM de uma faixa à outra.</p></div>
+      <p>Descreva o clima ou diga um artista (ex.: “tipo Calvin Harris”). A IA escolhe por onde começar e conduz o BPM de uma faixa à outra.</p></div>
     <form id="f-busca">
-      <textarea id="vibe" placeholder="Ex.: música calma para estudar à noite" aria-label="Descreva a vibe">${esc(S.busca)}</textarea>
+      <textarea id="vibe" placeholder="Ex.: música calma para estudar à noite, ou tipo Calvin Harris" aria-label="Descreva a vibe">${esc(S.busca)}</textarea>
       <button class="btn btn-pri">${ic("search")} Buscar faixas</button>
     </form>
     ${msg ? `<div class="aviso">${esc(msg)}</div>` : ""}
@@ -259,7 +287,7 @@ async function telaInicio(msg, exemplos) {
     <section class="painel demo"><div class="ph">${ic("chart")} Como a IA conduz o set</div>
       <div id="traj"></div><div style="padding:0 16px 8px">${legenda(true)}</div>
       <p class="mudo pb" style="padding-top:4px">Defina um BPM alvo e ela monta a subida faixa a faixa, mantendo BPM dentro de ±5% e chaves compatíveis a cada troca.</p></section>
-    <div class="rodape-nota">MVP acadêmico: faixas fictícias e reprodução simulada, sem áudio.</div>`;
+    <div class="rodape-nota">O app monta a ordem das faixas. Para ouvir, use o botão Ouvir (abre no Spotify ou no YouTube). <span class="cred-bpm">BPM e tom: <a href="https://getsongbpm.com" target="_blank" rel="noopener">GetSongBPM</a>.</span></div>`;
   const demo = [88, 93, 96, 99, 102, 110, 114].map((b, i) => ({ bpm: b, titulo: "Faixa " + (i + 1) }));
   S.redesenha = () => desenhaTraj(demo, { bpm: 117, titulo: "Sugestão da IA" }, 128);
   S.redesenha();
@@ -288,11 +316,12 @@ async function buscar(texto) {
 }
 
 /* ---------- Sem resultados ---------- */
-function telaSemResultados() {
+function telaSemResultados(r) {
   abas("buscar");
   app.innerHTML = topbar("Início") + `<div class="centro-tela"><div class="circ">${ic("search")}</div>
     <h2 class="titulo-p" style="font-size:34px">Nenhuma faixa para essa vibe</h2>
     <div class="mudo" style="max-width:34ch">Descreva de outro jeito: o clima, a energia ou o gênero que você quer no set.</div>
+    ${r?.aviso ? `<div class="aviso erro">${esc(r.aviso)}</div>` : ""}
     <button class="btn btn-pri" id="nova" style="margin-top:8px">Nova busca</button></div>`;
   ligaVoltar(() => telaInicio());
   $("#nova").onclick = () => telaInicio();
@@ -307,9 +336,9 @@ function telaResultados(r) {
       <div class="th"><span></span><span>Faixa</span><span class="so-tec">BPM</span><span class="so-tec">Chave</span><span class="so-tec">Energia</span><span></span></div>
       ${r.resultados.map((f, i) => `
       <div class="tr"><span class="n">${i + 1}</span>
-        <div class="tx">${capa(f, "p")}<div style="min-width:0"><div class="tit">${esc(f.titulo)}</div><div class="art">${esc(f.artista)}</div></div></div>
+        <div class="tx">${capa(f, "p")}<div style="min-width:0"><div class="tit">${esc(f.titulo)}</div><div class="art">${esc(f.artista)}</div>${ouvir(f)}</div></div>
         <div class="meta so-tec"><span class="bpm-v">${f.bpm}</span>${chave(f.tom)}${energia(f.energia)}</div>
-        <div class="acao"><button class="btn btn-pri pequeno" data-id="${f.id}">${ic("disc")} Tocar</button></div>
+        <div class="acao"><button class="btn btn-pri pequeno" data-id="${f.id}">${ic("disc")} Criar sequência</button></div>
       </div>`).join("")}
     </section>`;
   ligaVoltar(() => telaInicio());
@@ -325,20 +354,12 @@ const entrarDJ = id => comSpinner(async () => {
 });
 
 /* ---------- Modo DJ ---------- */
+/* o app não toca áudio: guarda só quando a faixa virou a atual, para estimar quanto dela a pessoa ouviu no
+   Spotify/YouTube antes de pular (tempo real, sem barra nem animação) */
 function iniciarReproducao(faixa) {
-  pararReproducao();
-  const VEL = 15;                        // simulação acelerada (sem áudio)
-  S.tocando = { id: faixa.id, dur: faixa.duracao, pos: 0, t: null };
-  S.tocando.t = setInterval(() => {
-    const t = S.tocando; if (!t) return;
-    t.pos = Math.min(t.dur, t.pos + VEL * 0.25);
-    const b = $("#barra"), c = $("#tempo-atual");
-    if (b) b.style.clipPath = `inset(0 ${100 - 100 * t.pos / t.dur}% 0 0)`;
-    if (c) c.textContent = mmss(t.pos);
-    if (t.pos >= t.dur) { clearInterval(t.t); $(".eq")?.classList.add("parado"); }
-  }, 250);
+  S.tocando = { id: faixa.id, dur: faixa.duracao, inicio: Date.now() };
 }
-const fracao = () => (S.tocando ? S.tocando.pos / S.tocando.dur : 0);
+const fracao = () => (S.tocando ? Math.min(1, (Date.now() - S.tocando.inicio) / 1000 / S.tocando.dur) : 0);
 async function sairDoDJ() {
   if (!(await saidaOk())) return;
   pararReproducao();
@@ -371,7 +392,6 @@ function telaDJ(d, aviso) {
   app.classList.toggle("sem-anim", quieto);
   const a = d.atual, p = d.sugerida, alvo = d.bpm_alvo;
   if (!S.tocando || S.tocando.id !== a.id) iniciarReproducao(a);
-  const pos = S.tocando ? S.tocando.pos : 0;
   const rotulo = { combina_bem: "Combina bem", ok: "Compatível", arriscada: "Transição arriscada" };
   const e10 = e => `energia ${Math.round(e * 10)}/10`;
   app.innerHTML = `
@@ -387,19 +407,18 @@ function telaDJ(d, aviso) {
         </div>
       </section>
       <section class="painel deck-now">
-        <div class="ph">${ic("disc")} Tocando agora${d.pode_desfazer ? `<button class="desfazer" id="b-desfazer" type="button">${ic("undo")} Desfazer aceite</button>` : ""}</div>
+        <div class="ph">${ic("disc")} Faixa atual${d.pode_desfazer ? `<button class="desfazer" id="b-desfazer" type="button">${ic("undo")} Desfazer aceite</button>` : ""}</div>
         <div class="pb">
-          <div class="deck-id">${capa(a, "", true)}<div class="tx"><div class="tit">${esc(a.titulo)}</div><div class="art">${esc(a.artista)}</div></div></div>
+          <div class="deck-id">${capa(a)}<div class="tx"><div class="tit">${esc(a.titulo)}</div><div class="art">${esc(a.artista)}</div>${ouvir(a)}</div></div>
           <div class="stats so-tec"><div class="stat"><span class="bpm-v">${a.bpm}</span><span class="u">BPM</span></div>${chave(a.tom, true)}
             <span class="en-l">${energia(a.energia)} ${e10(a.energia)}</span></div>
-          ${onda(a, 100 * pos / a.duracao)}
-          <div class="tempos"><span id="tempo-atual">${mmss(pos)}</span><span>${mmss(a.duracao)}</span></div>
+          <p class="mudo nota-ouvir">Ouça no Spotify ou no YouTube e volte aqui para aceitar ou pular.</p>
         </div>
       </section>
       <section class="painel deck-ia">
         <div class="ph">${ic("sparkle")} Próxima sugerida pela IA</div>
         <div class="pb">${p ? `
-          <div class="ia-topo">${capa(p)}<div class="tx" style="flex:1;min-width:0"><div class="tit" style="font-size:22px;font-weight:700">${esc(p.titulo)}</div><div class="art">${esc(p.artista)}</div></div>${anel(p)}</div>
+          <div class="ia-topo">${capa(p)}<div class="tx" style="flex:1;min-width:0"><div class="tit" style="font-size:22px;font-weight:700">${esc(p.titulo)}</div><div class="art">${esc(p.artista)}</div>${ouvir(p)}</div>${anel(p)}</div>
           <span class="selo ${p.classe}">${rotulo[p.classe]}</span>
           <div class="stats so-tec"><div class="stat"><span class="bpm-v">${p.bpm}</span><span class="u">BPM</span></div><span class="delta">${pct(a.bpm, p.bpm)}</span>${chave(p.tom, true)}
             <span class="en-l">${energia(p.energia)} ${e10(p.energia)}</span></div>
@@ -416,9 +435,10 @@ function telaDJ(d, aviso) {
       <button class="chip" id="b-vibe">Mudar a vibe</button></div></section>` : ""}
     <details class="dev"><summary>Estados e eventos</summary><div>${d.caminho_estados.join(" → ")} · ${d.eventos.join(", ")}</div></details>
     <div class="transporte">
+      <button class="btn btn-sec so-ico" id="b-faixa-ant" type="button" aria-label="Voltar para a faixa anterior" ${d.pode_voltar ? "" : "disabled title='Ainda não há faixa anterior'"}>${ic("prev")}<span class="rot-s">Voltar</span></button>
       <button class="btn btn-sec" id="b-pular" type="button">${ic("skip")} Pular</button>
-      <button class="btn ${d.curtida ? "btn-pri" : "btn-sec"}" id="b-curtir" type="button" aria-pressed="${!!d.curtida}">${ic("heart")} ${d.curtida ? "Curtida" : "Curtir"}</button>
-      <button class="btn btn-sec" id="b-salvar" type="button" aria-label="Salvar sequência" ${d.sequencia.length < 2 ? "disabled title='Aceite uma sugestão primeiro'" : ""}>${ic("save")}<span class="rot-s">Salvar sequência</span></button>
+      <button class="btn so-ico ${d.curtida ? "btn-pri" : "btn-sec"}" id="b-curtir" type="button" aria-label="Curtir" aria-pressed="${!!d.curtida}">${ic("heart")}<span class="rot-s">${d.curtida ? "Curtida" : "Curtir"}</span></button>
+      <button class="btn btn-sec so-ico" id="b-salvar" type="button" aria-label="Salvar sequência" ${d.sequencia.length < 2 ? "disabled title='Aceite uma sugestão primeiro'" : ""}>${ic("save")}<span class="rot-s">Salvar sequência</span></button>
       <button class="btn btn-pri" id="b-aceitar" type="button" ${p ? "" : "disabled"}>${ic("check")} Aceitar</button>
     </div>`;
   S.redesenha = () => desenhaTraj(d.sequencia, p, alvo);
@@ -434,15 +454,16 @@ function telaDJ(d, aviso) {
   $("#b-bpm-menos").onclick = () => chama("bpm", { delta: -5 });
   $("#b-bpm-auto")?.addEventListener("click", () => chama("bpm", { auto: true }));
   $("#b-trocar")?.addEventListener("click", () => chama("skip", { target: "sugestao" }));
+  $("#b-faixa-ant").onclick = () => chama("back");
   $("#b-pular").onclick = () => chama("skip", { target: "atual", elapsed_fraction: fracao() });
   $("#b-curtir").onclick = async () => {
     try {
       const on = (await api("POST", `/api/session/${S.sid}/like`)).curtida, b = $("#b-curtir");
-      b.innerHTML = `${ic("heart")} ${on ? "Curtida" : "Curtir"}`;
+      b.innerHTML = `${ic("heart")}<span class="rot-s">${on ? "Curtida" : "Curtir"}</span>`;
       b.classList.toggle("btn-pri", on); b.classList.toggle("btn-sec", !on); b.setAttribute("aria-pressed", String(on));
     } catch (e) { toast(e.message); }
   };
-  $("#b-salvar").onclick = () => telaSalvar(d);
+  $("#b-salvar").onclick = () => logado() ? telaSalvar(d) : pedeConta();
   app.querySelectorAll("[data-aj]").forEach(b => b.onclick = () => chama("adjust", { direction: b.dataset.aj }));
   $("#b-vibe")?.addEventListener("click", () => { pararReproducao(); telaInicio(); });
   if (!quieto) paraTop();
@@ -522,15 +543,30 @@ function telaSalva(r) {
 }
 
 /* ---------- Playlists ---------- */
+/* playlists só existem dentro de uma conta: quem está sem conta é convidado a entrar */
+async function pedeConta() {
+  const vai = await confirma("Entre para salvar", "As playlists ficam guardadas na sua conta. Ao ir para a tela de entrada, a sequência que você montou agora se perde.",
+                             "Entrar ou criar conta", "Agora não");
+  if (vai) location.assign("/login");
+}
 async function telaPlaylists() {
   pararReproducao(); abas("playlists");
+  if (!logado()) {
+    app.innerHTML = `<h1 class="titulo-p">Playlists</h1>
+      <div class="vazio">As playlists ficam guardadas na sua conta. Crie uma conta grátis (ou entre) para salvar as sequências que você montar e vê-las em qualquer aparelho.</div>
+      <div class="fim"><button class="btn btn-pri cheio" id="ir-login">${ic("user")} Entrar ou criar conta</button>
+      <button class="btn btn-sec cheio" id="nova">${ic("plus")} Nova busca</button></div>`;
+    $("#ir-login").onclick = () => location.assign("/login");
+    $("#nova").onclick = () => { S.busca = ""; telaInicio(); };
+    return;
+  }
   app.innerHTML = `<h1 class="titulo-p">Playlists</h1><p class="mudo">Carregando…</p>`;
   try {
     const { playlists } = await api("GET", "/api/playlists");
     app.innerHTML = `<h1 class="titulo-p">Playlists</h1>` + (playlists.length
       ? `<section class="painel lista">${playlists.map(p => `<button class="item clic" data-pl="${p.id}"><div class="capa p" style="--k:#7a66ff;--a:${90 + semente(p.id) % 180}deg">${ic("list")}</div><div class="tx">
           <div class="tit">${esc(p.title)}</div><div class="art">${p.faixas} faixas</div><div class="tags-i">${p.tags.map(esc).join(", ")}</div></div>${ic("chev", "ic seta")}</button>`).join("")}</section>`
-      : `<div class="vazio">${userId() ? "Nenhuma playlist ainda. Faça uma busca e salve uma sequência." : "Você não permitiu que eu lembre, então nada é guardado."}</div>`)
+      : `<div class="vazio">${userId() || logado() ? "Nenhuma playlist ainda. Faça uma busca e salve uma sequência." : "Você não permitiu que eu lembre, então nada é guardado."}</div>`)
       + `<div class="fim"><button class="btn btn-pri cheio" id="nova">${ic("plus")} Nova busca</button></div>`;
     app.querySelectorAll("[data-pl]").forEach(b => b.onclick = () => telaPlaylist(b.dataset.pl, true));
     $("#nova").onclick = () => { S.busca = ""; telaInicio(); };
@@ -546,7 +582,7 @@ async function telaPlaylist(pid, minha) {
       <section class="painel tabela">
         <div class="th"><span></span><span>Faixa</span><span class="so-tec">BPM</span><span class="so-tec">Chave</span><span class="so-tec">Energia</span><span></span></div>
         ${p.faixas.map((f, i) => `<div class="tr"><span class="n">${i + 1}</span>
-          <div class="tx">${capa(f, "p")}<div style="min-width:0"><div class="tit">${esc(f.titulo)}</div><div class="art">${esc(f.artista)}</div></div></div>
+          <div class="tx">${capa(f, "p")}<div style="min-width:0"><div class="tit">${esc(f.titulo)}</div><div class="art">${esc(f.artista)}</div>${ouvir(f)}</div></div>
           <div class="meta so-tec"><span class="bpm-v">${f.bpm}</span>${chave(f.tom)}${energia(f.energia)}</div><div class="acao"></div></div>`).join("")}
       </section>
       <div class="fim">
@@ -572,8 +608,8 @@ function irInicio() { if (location.pathname !== "/") history.pushState(null, "",
 /* ---------- Privacidade (LGPD) ---------- */
 async function abrirPrivacidade() {
   const dlg = $("#dlg-priv");
-  const ligado = guarda.get(K.consent) === "sim";
-  $("#priv-estado").textContent = ligado ? "O SoulsBPM está lembrando das suas buscas e escolhas neste navegador." : "Você não permitiu que eu lembre. Nada é guardado.";
+  const ligado = logado() || guarda.get(K.consent) === "sim";
+  $("#priv-estado").textContent = ligado ? (logado() ? `Você está na conta ${S.conta.nome}. Suas buscas e escolhas ficam guardadas nela.` : "O SoulsBPM está lembrando das suas buscas e escolhas neste navegador.") : "Você não permitiu que eu lembre. Nada é guardado.";
   let html = "Ainda não aprendi nada sobre você.";
   if (ligado) {
     try {
@@ -594,15 +630,36 @@ $("#priv-apagar").onclick = async () => { await api("DELETE", "/api/history"); a
 $("#tab-buscar").onclick = async () => { if (!(await saidaOk())) return; pararReproducao(); irInicio(); };
 $("#tab-playlists").onclick = async () => { if (!(await saidaOk())) return; if (location.pathname !== "/") history.pushState(null, "", "/"); telaPlaylists(); };
 $("#tab-priv").onclick = abrirPrivacidade;
+$("#tab-conta").onclick = async () => { if (!S.carregou) await carregaConta(); if (logado()) { if (!(await saidaOk())) return; sair(); } else location.assign("/login"); };
 $("#consent-sim").onclick = () => { guarda.set(K.consent, "sim"); $("#consent").hidden = true; telaInicio(); };
 $("#consent-nao").onclick = () => { guarda.set(K.consent, "nao"); $("#consent").hidden = true; };
 window.addEventListener("popstate", iniciar);
 
-function iniciar() {
+async function carregaConta() {
+  try { S.conta = await (await fetch("/api/auth/me")).json(); } catch { S.conta = { logado: false }; }
+  atualizaMenuConta();
+}
+function atualizaMenuConta() {
+  const b = $("#tab-conta"); if (!b) return;
+  b.querySelector(".tab-t").textContent = logado() ? `Sair (${S.conta.nome})` : "Entrar";
+  b.title = logado() ? "Sair da conta" : "Entrar ou criar conta";
+}
+async function sair() {
+  try { await fetch("/api/auth/logout", { method: "POST" }); } catch {}
+  S.conta = { logado: false, exigir_login: S.conta?.exigir_login }; S.sid = null; S.dj = null; S.res = null;
+  guarda.del(K.consent); guarda.del(K.uid); guarda.del(K.visitante);   // no aparelho não sobra nada da conta
+  atualizaMenuConta();
+  location.replace("/login");                                 // página de login separada
+}
+
+async function iniciar() {
   const m = location.pathname.match(/^\/p\/([\w-]+)/);
-  if (guarda.get(K.consent) === null && !m) $("#consent").hidden = false;
+  if (!S.carregou) { await carregaConta(); S.carregou = true; }
   setTecnico(guarda.get(K.tec) !== "0", false);        // DJ: BPM, chave e energia visíveis por padrão
-  m ? telaPlaylist(m[1], false) : telaInicio();
+  if (m) return telaPlaylist(m[1], false);              // link compartilhado abre sem login
+  if (!logado() && (S.conta?.exigir_login || guarda.get(K.visitante) !== "1")) { location.replace("/login"); return; }
+  if (!logado() && guarda.get(K.consent) === null) $("#consent").hidden = false;
+  telaInicio();
 }
 iniciar();
 

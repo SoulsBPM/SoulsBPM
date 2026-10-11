@@ -118,3 +118,73 @@ class AoVivoTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ErroRealApareceTests(unittest.TestCase):
+    def test_chave_da_getsongbpm_recusada_mostra_o_motivo(self):
+        import urllib.error
+        def http(url):
+            raise urllib.error.HTTPError(url, 403, "x", {}, None)
+        p = AoVivo(lastfm_falso({"chill": FAIXAS_CHILL}), GetSongBPM("k", Cache(), http, pausa=0))
+        app = create_app(":memory:", provedor=p)
+        r = app.test_client().post("/api/search", json={"user_id": "u", "text": "música calma"}).get_json()
+        self.assertEqual(r["estado"], "sem_resultados")
+        self.assertIn("recusada", r["aviso"])
+
+
+def lastfm_artistas(top, similares, oficial="Calvin Harris"):
+    """Last.fm falso para busca por artista: artist.search / gettoptracks / getsimilar."""
+    def http(url):
+        if "method=artist.search" in url:
+            return {"results": {"artistmatches": {"artist": [{"name": oficial}]}}}
+        if "method=artist.getsimilar" in url:
+            return {"similarartists": {"artist": [{"name": n} for n in similares]}}
+        if "method=artist.gettoptracks" in url:
+            for nome, titulos in top.items():
+                if f"artist={nome.replace(' ', '+')}&" in url:
+                    return {"toptracks": {"track": [{"name": t, "artist": {"name": nome}} for t in titulos]}}
+            return {"toptracks": {"track": []}}
+        return {}
+    return LastFm("k", http, pausa=0)
+
+
+TOP = {"Calvin Harris": ["Summer", "Feel So Close", "Outside"], "David Guetta": ["Titanium", "Memories"]}
+TAB_ART = {("Calvin Harris", "Summer"): (128, "Am"), ("Calvin Harris", "Feel So Close"): (128, "Cm"),
+           ("Calvin Harris", "Outside"): (128, "Gm"), ("David Guetta", "Titanium"): (126, "Dm"),
+           ("David Guetta", "Memories"): (130, "Am")}
+
+
+def prov_artista():
+    return AoVivo(lastfm_artistas(TOP, ["David Guetta"]), bpm_falso(TAB_ART))
+
+
+class ArtistaTests(unittest.TestCase):
+    def test_extrai_artista_so_quando_explicito(self):
+        ex = musicfinder.extrair_artista
+        self.assertEqual(ex("tipo Calvin Harris"), "Calvin Harris")
+        self.assertEqual(ex("eu gosto das músicas de Calvin Harris"), "Calvin Harris")
+        self.assertEqual(ex("parecido com Coldplay"), "Coldplay")
+        self.assertIsNone(ex("música calma para estudar à noite"))
+        self.assertIsNone(ex("músicas de treino"))              # é vibe, não artista
+        self.assertIsNone(ex("treino de pernas"))
+
+    def test_busca_por_artista_traz_as_dele_e_de_parecidos(self):
+        app = create_app(":memory:", provedor=prov_artista())
+        c = app.test_client()
+        r = c.post("/api/search", json={"user_id": "u", "text": "tipo Calvin Harris"}).get_json()
+        self.assertEqual(r["estado"], "resultados")
+        self.assertIn("Calvin Harris", r["interpretacao"]["resumo"])
+        arts = [x["artista"] for x in r["resultados"]]
+        self.assertEqual(arts[:3], ["Calvin Harris"] * 3)             # as dele primeiro
+        self.assertIn("David Guetta", arts)                           # e as de artista parecido
+        d = c.post(f"/api/session/{r['session_id']}/play",
+                   json={"user_id": "u", "track_id": r["resultados"][0]["id"]}).get_json()
+        self.assertIsNotNone(d["sugerida"])
+
+    def test_frase_solta_so_vira_artista_se_o_nome_bater(self):
+        app = create_app(":memory:", provedor=prov_artista())
+        c = app.test_client()
+        r = c.post("/api/search", json={"user_id": "u", "text": "calvin harris"}).get_json()
+        self.assertEqual(r["estado"], "resultados")
+        r2 = c.post("/api/search", json={"user_id": "u", "text": "asdf qwer"}).get_json()   # não é artista
+        self.assertEqual(r2["estado"], "inicio")

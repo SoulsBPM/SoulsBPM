@@ -95,6 +95,16 @@ def registrar_pulo(perfil: Perfil, faixa: dict, prev: dict | None, tags_vibe, fr
     return {"tipo": tipo, "delta": d, "causa": causa}
 
 
+def desfazer_pulo(perfil: Perfil, faixa: dict, prev: dict | None, tags_vibe, info: dict):
+    """Reverte o ajuste que `registrar_pulo` fez (ao voltar para uma faixa pulada sem querer)."""
+    d = -info["delta"]
+    if info["causa"] == "transicao" and prev is not None:
+        perfil.somar(f"pair:{prev['id']}>{faixa['id']}", d)
+    else:
+        for t in tags_vibe:
+            perfil.somar(f"assoc:{t}|{faixa['id']}", d)
+
+
 def resumo(perfil: Perfil, limite: int = 5) -> dict:
     """Visão transparente do que o sistema aprendeu (para o usuário ver e apagar)."""
     ag = perfil._agora()

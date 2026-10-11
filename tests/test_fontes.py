@@ -182,3 +182,11 @@ class CatalogoTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CamelotReservaTests(unittest.TestCase):
+    def test_usa_o_campo_camelot_quando_a_tonalidade_nao_resolve(self):
+        from soulsbpm.fontes import GetSongBPM
+        r = GetSongBPM._normaliza({"tempo": "112", "key_of": "", "camelot": "11a"})
+        self.assertEqual(r, {"bpm": 112, "tom": "11A"})
+        self.assertIsNone(GetSongBPM._normaliza({"tempo": "112", "camelot": "99Z"}))

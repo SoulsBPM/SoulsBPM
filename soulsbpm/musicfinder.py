@@ -70,6 +70,42 @@ def rotulo_energia(e):
     return "baixa" if e < 0.35 else ("média" if e < 0.65 else "alta")
 
 
+_PREFIXOS_ARTISTA = [
+    r"(?:no\s+)?estilo\s+(?:de|do|da)", r"parecid[oa]s?\s+com", r"similar(?:es)?\s+(?:a|ao|à)", r"(?:tipo|como)",
+    r"(?:artista|banda|cantor|cantora|dj)\s*:?", r"(?:m[uú]sicas?|sons?|faixas?|hits?)\s+(?:de|do|da|dos|das)",
+    r"(?:quero|gosto|curto|ou[cç]o|escuto|gostar)\s+(?:de\s+|do\s+|da\s+)?(?:ouvir\s+)?",
+]
+_RE_ARTISTA = re.compile(r"^(?:.*?\b)?(?:" + "|".join(_PREFIXOS_ARTISTA) + r")\s+(.{2,60})$", re.I)
+
+
+def extrair_artista(texto: str):
+    """Nome de artista citado de forma explícita ("tipo Calvin Harris", "músicas do Coldplay"). None se não houver.
+    É só um candidato: o modo ao vivo confirma no Last.fm antes de usar."""
+    t = re.sub(r"\s+", " ", (texto or "").strip().strip("\"'“”.!?"))
+    m = _RE_ARTISTA.match(t)
+    if not m:
+        return None
+    nome = m.group(1).strip(" .,!?")
+    sem_acento = normalizar(nome)
+    toks = re.findall(r"[a-z0-9-]+", sem_acento)
+    if not toks or len(toks) > 5:
+        return None
+    if any(_casa(tk, x) for tk in toks for termos, _ in LEXICO for x in termos):   # "músicas de treino" é vibe, não artista
+        return None
+    return nome
+
+
+def candidato_artista(texto: str, clara: bool):
+    """Explícito ("tipo X") ou, quando a vibe não foi entendida, a frase curta inteira (confirmada depois no Last.fm)."""
+    nome = extrair_artista(texto)
+    if nome:
+        return nome, True
+    t = (texto or "").strip()
+    if not clara and 0 < len(re.findall(r"\S+", t)) <= 5:
+        return t, False
+    return None, False
+
+
 def interpretar(texto: str) -> dict:
     """Devolve {clara, tags(dict tag→peso), energia, generos, tecnico, resumo, termos}."""
     tokens = re.findall(r"[a-z0-9-]+", normalizar(texto or ""))
@@ -111,6 +147,8 @@ def interpretar(texto: str) -> dict:
 
 def vibe_score(faixa: dict, interp: dict) -> float:
     """Quanto a faixa combina com a vibe interpretada (0 a 1)."""
+    if interp.get("pontos") is not None:                    # busca por artista: vale a lista montada na busca
+        return interp["pontos"].get(faixa["id"], 0.0)
     tags, alvo, gens = interp["tags"], interp["energia"], interp["generos"]
     total = sum(tags.values())
     s_tag = sum(w for t, w in tags.items() if t in faixa["tags"]) / total if total else None
