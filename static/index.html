@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0d1c">
+<title>SoulsBPM</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237a66ff'/%3E%3Cg stroke='%230e0d1c' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M8 14v4M12 10v12M16 7v18M20 11v10M24 14v4'/%3E%3C/g%3E%3C/svg%3E">
+<script>
+/* aplica o tema antes de pintar a página (evita o "piscar"): preferência salva ou a do sistema */
+(function(){var t=null;try{t=localStorage.getItem("souls_tema")}catch(e){}
+if(t!=="claro"&&t!=="escuro")t=matchMedia("(prefers-color-scheme: light)").matches?"claro":"escuro";
+document.documentElement.dataset.tema=t;
+document.querySelector('meta[name="theme-color"]').setAttribute("content",t==="claro"?"#f4f3fa":"#0e0d1c");})();
+</script>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app" id="shell">
+  <button class="menu-btn menu-abrir" id="menu-abrir" type="button" aria-controls="tabs" aria-expanded="false" aria-label="Abrir menu"><span class="ico" data-i="menu"></span></button>
+  <div class="menu-veu" id="menu-veu" aria-hidden="true"></div>
+  <nav class="tabs" id="tabs" aria-label="Navegação">
+    <div class="side-top">
+      <div class="side-logo" id="side-logo"></div>
+      <button class="menu-btn" id="menu-toggle" type="button" aria-controls="tabs" aria-expanded="false" aria-label="Fechar menu"><span class="ico" data-i="menu"></span></button>
+    </div>
+    <button class="tab" id="tab-buscar" data-tab="buscar"><span class="ico" data-i="search"></span><span class="tab-t">Buscar</span></button>
+    <button class="tab" id="tab-playlists" data-tab="playlists"><span class="ico" data-i="list"></span><span class="tab-t">Playlists</span></button>
+    <button class="tab" id="tab-priv" data-tab="priv"><span class="ico" data-i="shield"></span><span class="tab-t">Privacidade</span></button>
+  </nav>
+  <button class="tema-btn tema-topo tema-fixo" id="tab-tema" type="button"></button>
+  <main class="tela" id="app" aria-live="polite"></main>
+  <div class="sheet" id="consent" hidden>
+    <p><strong>Posso lembrar do que você ouve?</strong> Guardo suas buscas, curtidas e pulos só para melhorar as
+    próximas sugestões. Você vê e apaga tudo em “Privacidade”. Não guardo áudio.</p>
+    <div class="linha">
+      <button class="btn btn-sec" id="consent-nao">Agora não</button>
+      <button class="btn btn-pri" id="consent-sim">Pode lembrar</button>
+    </div>
+  </div>
+</div>
+
+<dialog id="dlg-priv">
+  <h3>Privacidade e perfil</h3>
+  <p class="mudo" id="priv-estado"></p>
+  <p class="mudo" id="credito" hidden>BPM e tom das músicas: <a href="https://getsongbpm.com" target="_blank" rel="noopener">GetSongBPM</a></p>
+  <div id="priv-perfil" class="info-box"></div>
+  <div class="linha col">
+    <button class="btn btn-sec" id="priv-zerar">Zerar perfil aprendido</button>
+    <button class="btn btn-sec" id="priv-apagar">Apagar histórico</button>
+    <button class="btn btn-pri" id="priv-fechar">Fechar</button>
+  </div>
+</dialog>
+<dialog id="dlg-conf">
+  <h3 id="conf-tit"></h3>
+  <p class="mudo" id="conf-txt"></p>
+  <div class="linha col">
+    <button class="btn btn-pri" id="conf-no" type="button"></button>
+    <button class="btn btn-sec" id="conf-ok" type="button"></button>
+  </div>
+</dialog>
+<script>fetch("/api/health").then(r => r.json()).then(h => { if (h.ao_vivo) document.getElementById("credito").hidden = false; }).catch(() => {});</script>
+<script src="/static/app.js"></script>
+</body>
+</html>

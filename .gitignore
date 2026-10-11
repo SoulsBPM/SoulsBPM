@@ -1,0 +1,5 @@
+libs/
+__pycache__/
+data/cache_fontes.db
+data/soulsbpm.db
+*.pyc
