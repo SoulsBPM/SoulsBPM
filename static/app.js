@@ -159,6 +159,7 @@ async function saidaOk() {
 /* botão "Ouvir": o app não toca áudio; abre a busca da faixa (artista + título) no app do Spotify ou do YouTube; sem o app instalado, abre o site */
 const LOGO_SP = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#1db954"/><path d="M6.2 9.2c3.8-1.1 8.2-.8 11.6 1.2M6.9 12.4c3.2-.9 6.8-.6 9.6 1M7.6 15.4c2.5-.6 5.2-.4 7.4.8" fill="none" stroke="#0e0d1c" stroke-width="1.7" stroke-linecap="round"/></svg>';
 const LOGO_YT = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="4.5" width="22" height="15" rx="4.5" fill="#ff3b30"/><path d="m10 9 5.2 3-5.2 3z" fill="#fff"/></svg>';
+const EH_BRAVE = !!navigator.brave;
 const PLAT = (() => {
   const ua = navigator.userAgent || "";
   if (/Android/i.test(ua)) return "android";
@@ -168,7 +169,7 @@ const PLAT = (() => {
 
 /* Endereço para abrir direto no aplicativo (ou null quando não há como tentar o app nessa plataforma).
    - Spotify no Android: "intent:" com a página web como reserva; o navegador cai no site se o app não estiver instalado.
-   - YouTube no Android: esquema vnd.youtube:// (o Brave recusa "intent://" e não abre o app por link https).
+   - YouTube no Android: "intent:" para o app do YouTube com o site como reserva (Chrome, Samsung, Edge, Firefox). No Brave não há como: ele bloqueia isso.
    - iOS e PC: esquema do app (spotify:, youtube://); quem cuida da reserva é abrirNoApp(). O YouTube não tem app de PC. */
 function enderecoApp(servico, q, web) {
   const fallback = encodeURIComponent(web);
@@ -176,7 +177,10 @@ function enderecoApp(servico, q, web) {
     if (PLAT === "android") return { url: `intent:search:${q}#Intent;scheme=spotify;package=com.spotify.music;S.browser_fallback_url=${fallback};end`, nativo: true };
     return { url: `spotify:search:${q}`, nativo: false };
   }
-  if (PLAT === "android") return { url: `vnd.youtube://www.youtube.com/results?search_query=${q}`, nativo: false };   // esquema do app; o Brave não abre o app por link https nem por intent://
+  if (PLAT === "android") {
+    if (EH_BRAVE) return null;                              // o Brave bloqueia intent:// e esquemas do app; fica o link comum (site)
+    return { url: `intent://www.youtube.com/results?search_query=${q}#Intent;scheme=https;package=com.google.android.youtube;S.browser_fallback_url=${fallback};end`, nativo: true };
+  }
   if (PLAT === "ios") return { url: `youtube://www.youtube.com/results?search_query=${q}`, nativo: false };
   return null;
 }
