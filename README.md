@@ -171,6 +171,35 @@ Se preferir controlar as músicas, `python tools/importar_catalogo.py --entrada 
 `data/minhas_faixas.exemplo.csv`) gera `data/catalog.real.json` só com a GetSongBPM (chave `GETSONGBPM_API_KEY`), e
 `SOULSBPM_CATALOG=data/catalog.real.json python app.py` usa esse arquivo.
 
+## IA de linguagem no MusicFinder (opcional, com opções grátis)
+
+O MusicFinder pode usar um **modelo de linguagem** para entender frases livres como
+"música pra chorar no ônibus voltando da faculdade", em vez de depender só do dicionário em português.
+
+- **Como ligar (escolha um, basta a chave):**
+
+  | Provedor | Variável da chave | Custo |
+  |---|---|---|
+  | Google Gemini (aistudio.google.com) | `GEMINI_API_KEY` | plano gratuito, sem cartão |
+  | Groq (console.groq.com) | `GROQ_API_KEY` | plano gratuito |
+  | OpenRouter (openrouter.ai) | `OPENROUTER_API_KEY` | modelos gratuitos, limite diário baixo |
+  | Anthropic (Claude) | `ANTHROPIC_API_KEY` | pago |
+
+  Se houver mais de uma chave, vale a primeira da ordem acima; `SOULSBPM_IA_PROVEDOR` (`gemini`, `groq`, `openrouter`
+  ou `anthropic`) força a escolha e `SOULSBPM_MODELO_IA` troca o modelo. Sem nenhuma chave, o app usa só o léxico, como antes.
+- **O que a IA faz:** recebe a frase e devolve só tags de clima, energia (0 a 1) e gêneros. Tudo que o modelo devolve é
+  **validado** (`soulsbpm/llm.py`): só passam tags e gêneros que o app conhece. O resto da recomendação (BPM ±5%, Camelot,
+  energia, aprendizado por pulos e likes) continua sendo regra explícita e explicável.
+- **Reserva:** se a IA falhar, demorar mais de 10 s ou não entender a frase, vale o léxico em português; após 3 falhas
+  seguidas a IA fica em pausa por 1 minuto. A busca nunca fica sem resposta.
+- **Limites:** respostas repetidas ficam em cache e há no máximo 20 buscas por minuto por IP (`SOULSBPM_BUSCAS_POR_MIN`).
+- **Privacidade:** o texto da busca (a vibe) é enviado ao provedor escolhido. No plano gratuito do Gemini, o Google pode usar
+  esses textos para melhorar os produtos dele; por isso o app não envia nome, conta nem histórico, só a frase.
+- **Conferir:** `https://SEU-LINK/api/health` mostra `"ia": true` e o provedor/modelo. Para ver o erro exato de uma chamada:
+  `python tools/diagnostico_ia.py "sua frase"` (a chave nunca é impressa). Se o modelo padrão deixar de existir, o erro
+  aparece ali e basta definir `SOULSBPM_MODELO_IA`.
+- A IA só liga no modo ao vivo (com as chaves do Last.fm e da GetSongBPM). Os testes não chamam a IA.
+
 ## Publicar na internet (link público)
 
 **Login.** O app tem uma página própria de login em `/login` (`static/login.html`, `.css`, `.js`), separada do app e adaptada a celular, tablet e PC. Ela oferece *Entrar* e *Criar conta* (usuário + senha, sem e-mail). Quem não está logado (e não escolheu *Continuar sem conta*) é levado para `/login`; depois do login volta para `/`. A senha é guardada só como hash
@@ -189,7 +218,7 @@ para **exigir** conta em tudo, defina `SOULSBPM_EXIGIR_LOGIN=1` (links públicos
      reinício, os dados somem; aponte `SOULSBPM_DATA` para a pasta de um disco persistente.
    O cache das APIs de música (`cache_fontes.db`) continua em arquivo; se for apagado, ele só se refaz nas próximas buscas.
 2. **Variáveis de ambiente** (nunca suba o arquivo `.env` para o Git; o `.gitignore` já o ignora):
-   `LASTFM_API_KEY`, `GETSONGBPM_API_KEY`, `DATABASE_URL` (ou `SOULSBPM_DATA=/caminho/do/disco`), `SOULSBPM_EXIGIR_LOGIN=1` (opcional), `SOULSBPM_PROXY=1` (HTTPS da hospedagem
+   `LASTFM_API_KEY`, `GETSONGBPM_API_KEY`, `GEMINI_API_KEY` (opcional, liga a IA; ou `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`), `DATABASE_URL` (ou `SOULSBPM_DATA=/caminho/do/disco`), `SOULSBPM_EXIGIR_LOGIN=1` (opcional), `SOULSBPM_PROXY=1` (HTTPS da hospedagem
    na frente; use o nº de proxies) e, se quiser, `SOULSBPM_BUSCAS_POR_MIN` (padrão 20 buscas/min por IP).
 3. **Comandos:** instalar com `pip install -r requirements.txt` e iniciar com `python app.py` (usa o servidor de produção
    waitress; a hospedagem define `PORT`). **Uma instância só.**

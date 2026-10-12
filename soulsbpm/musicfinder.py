@@ -1,7 +1,7 @@
 """MusicFinder: transforma a vibe em parâmetros (sentimento, energia, gênero).
 
-MVP: interpretador por léxico em português (sem chamada externa), isolado atrás de
-`interpretar()` para ser trocado depois por uma API de linguagem natural.
+Interpretador por modelo de linguagem (Claude, soulsbpm/llm.py) quando há ANTHROPIC_API_KEY, com o
+léxico em português como reserva. Tudo isolado atrás de `interpretar()`.
 """
 import re
 import unicodedata
@@ -106,8 +106,52 @@ def candidato_artista(texto: str, clara: bool):
     return None, False
 
 
+_ia = None          # interpretador por modelo de linguagem (soulsbpm.llm); None = só léxico
+
+
+def configurar_ia(interpretador):
+    """Liga (ou desliga, com None) o interpretador por IA. Chamado pelo app quando há ANTHROPIC_API_KEY."""
+    global _ia
+    _ia = interpretador
+
+
+def ia_ativa() -> bool:
+    return _ia is not None
+
+
+def ia_nome():
+    """Provedor e modelo em uso (sem a chave), ou None."""
+    return f"{_ia.provedor}/{_ia.modelo}" if _ia is not None and hasattr(_ia, "provedor") else None
+
+
+def _resumo(tags, energia, generos):
+    partes = []
+    if tags:
+        partes.append("clima " + ", ".join(sorted(tags, key=lambda k: -tags[k])[:4]))
+    if energia is not None:
+        partes.append(f"energia {rotulo_energia(energia)}")
+    if generos:
+        partes.append("gênero " + ", ".join(generos))
+    return ("Entendi: " + " · ".join(partes)) if partes else "Não consegui identificar o clima."
+
+
 def interpretar(texto: str) -> dict:
-    """Devolve {clara, tags(dict tag→peso), energia, generos, tecnico, resumo, termos}."""
+    """Devolve {clara, tags(dict tag→peso), energia, generos, tecnico, resumo, termos}.
+
+    Com IA ligada, o modelo de linguagem interpreta a frase; se ele falhar ou não achar o clima,
+    vale o léxico em português (abaixo), então a busca nunca fica sem resposta."""
+    if _ia is not None:
+        r = _ia(texto)
+        if r and r["clara"]:
+            lex = interpretar_lexico(texto)
+            return {"clara": True, "tags": r["tags"], "energia": r["energia"], "generos": r["generos"],
+                    "tecnico": r["tecnico"] or lex["tecnico"], "termos": lex["termos"],
+                    "resumo": _resumo(r["tags"], r["energia"], r["generos"]), "exemplos": [], "origem": "ia"}
+    return interpretar_lexico(texto)
+
+
+def interpretar_lexico(texto: str) -> dict:
+    """Interpretador por léxico em português (sem chamada externa)."""
     tokens = re.findall(r"[a-z0-9-]+", normalizar(texto or ""))
     tags, alvos, deltas, generos, termos = {}, [], 0.0, [], []
     tecnico = any(_casa(t, x) for t in tokens for x in TECNICOS)
@@ -132,16 +176,9 @@ def interpretar(texto: str) -> dict:
     if energia is not None:
         energia = round(min(0.95, max(0.05, energia)), 2)
     clara = bool(tags or generos or energia is not None)
-    partes = []
-    if tags:
-        partes.append("clima " + ", ".join(sorted(tags, key=lambda k: -tags[k])[:4]))
-    if energia is not None:
-        partes.append(f"energia {rotulo_energia(energia)}")
-    if generos:
-        partes.append("gênero " + ", ".join(generos))
     return {"clara": clara, "tags": tags, "energia": energia, "generos": generos,
             "tecnico": tecnico, "termos": sorted(set(termos)),
-            "resumo": ("Entendi: " + " · ".join(partes)) if partes else "Não consegui identificar o clima.",
+            "resumo": _resumo(tags, energia, generos),
             "exemplos": [] if clara else EXEMPLOS}
 
 

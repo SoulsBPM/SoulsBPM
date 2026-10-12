@@ -16,11 +16,12 @@ from flask import Flask, g, jsonify, make_response, request, send_from_directory
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from soulsbpm import feedback
+from soulsbpm import feedback, musicfinder
 from soulsbpm.aovivo import provedor_do_ambiente
 from soulsbpm.contas import COOKIE, SESSAO_DIAS, Contas
 from soulsbpm.engine import Erro, Motor
 from soulsbpm.limite import LimiteJanela
+from soulsbpm.llm import do_ambiente as llm_do_ambiente
 from soulsbpm.store import Store
 
 RAIZ = pathlib.Path(__file__).resolve().parent
@@ -60,9 +61,13 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
     dados = pathlib.Path(os.environ.get("SOULSBPM_DATA") or RAIZ / "data")     # pasta do banco e do cache (disco persistente)
     limite_busca = LimiteJanela(buscas_por_minuto or int(os.environ.get("SOULSBPM_BUSCAS_POR_MIN", 20)))
     arquivo = catalog_path or os.environ.get("SOULSBPM_CATALOG")
+    musicfinder.configurar_ia(None)
     if provedor is None and not arquivo:                 # com as duas chaves no ambiente, liga o modo ao vivo
         dados.mkdir(parents=True, exist_ok=True)
         provedor = provedor_do_ambiente(dados)
+        ia = llm_do_ambiente()                                          # MusicFinder por IA (opcional)
+        if provedor is not None and ia:
+            musicfinder.configurar_ia(ia)
         if provedor is None:
             raise SemChaves(MSG_SEM_CHAVES)
     # modo ao vivo parte vazio (as faixas reais chegam a cada busca); com arquivo próprio usa só as faixas dele
@@ -172,7 +177,7 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "faixas": len(motor.catalogo), "ao_vivo": bool(provedor)}
+        return {"ok": True, "faixas": len(motor.catalogo), "ao_vivo": bool(provedor), "ia": musicfinder.ia_ativa(), "ia_provedor": musicfinder.ia_nome()}
 
     @app.post("/api/search")
     def search():
