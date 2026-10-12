@@ -167,7 +167,7 @@ const PLAT = (() => {
 })();
 
 /* Endereço para abrir direto no aplicativo (ou null quando não há como tentar o app nessa plataforma).
-   - Android: "intent:" com a página web como reserva; o próprio Chrome cai no site se o app não estiver instalado.
+   - Android: "intent:" com a página web como reserva; o navegador cai no site se o app não estiver instalado.
    - iOS e PC: esquema do app (spotify:, youtube://); quem cuida da reserva é abrirNoApp(). O YouTube não tem app de PC. */
 function enderecoApp(servico, q, web) {
   const fallback = encodeURIComponent(web);
@@ -175,7 +175,7 @@ function enderecoApp(servico, q, web) {
     if (PLAT === "android") return { url: `intent:search:${q}#Intent;scheme=spotify;package=com.spotify.music;S.browser_fallback_url=${fallback};end`, nativo: true };
     return { url: `spotify:search:${q}`, nativo: false };
   }
-  if (PLAT === "android") return { url: `intent://www.youtube.com/results?search_query=${q}#Intent;scheme=https;package=com.google.android.youtube;S.browser_fallback_url=${fallback};end`, nativo: true };
+  if (PLAT === "android") return { url: `intent://www.youtube.com/results?search_query=${q}#Intent;scheme=vnd.youtube;package=com.google.android.youtube;S.browser_fallback_url=${fallback};end`, nativo: true };
   if (PLAT === "ios") return { url: `youtube://www.youtube.com/results?search_query=${q}`, nativo: false };
   return null;
 }
@@ -200,7 +200,10 @@ function abrirNoApp(url, web) {
     window.removeEventListener("blur", marca);
     window.removeEventListener("pagehide", marca);
     document.removeEventListener("visibilitychange", onVis);
-    if (!abriu) { if (!window.open(web, "_blank", "noopener")) location.href = web; }
+    if (abriu) return;
+    const w = window.open(web, "_blank");                    // sem "noopener" na chamada: com ele o retorno é sempre null
+    if (w) { try { w.opener = null; } catch (_) {} }
+    else if (PLAT !== "desktop") location.href = web;         // bloqueado: no celular troca de aba mesmo; no PC não derruba a página
   }, 1200);
 }
 
