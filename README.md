@@ -58,16 +58,16 @@ ANTES DE COMEÇAR
 
 8) RODAR OS TESTES (opcional)
    python -m unittest discover -s tests -t .
-- Deve aparecer "OK" no final (108 testes).
+- Deve aparecer "OK" no final (152 testes).
 
 Resumo:
 ```bash
-pip install -r requirements.txt     # só o Flask
+pip install -r requirements.txt     # Flask, waitress e psycopg (Postgres)
 python app.py                       # http://localhost:5000
-python -m unittest discover -s tests -t .   # 108 testes
+python -m unittest discover -s tests -t .   # 152 testes
 ```
 
-Variáveis opcionais: `PORT` (padrão 5000) e `SOULSBPM_DB` (caminho do SQLite, padrão `data/soulsbpm.db`).
+Variáveis opcionais: `PORT` (padrão 5000), `SOULSBPM_DB` (caminho do SQLite, padrão `data/soulsbpm.db`) e `DATABASE_URL` (endereço de um PostgreSQL; quando definida, substitui o SQLite).
 
 ## O que o MVP faz
 
@@ -181,10 +181,15 @@ por minuto por IP (`SOULSBPM_LOGINS_POR_MIN`). Por padrão há também o botão 
 para **exigir** conta em tudo, defina `SOULSBPM_EXIGIR_LOGIN=1` (links públicos de playlist continuam abertos).
 **Playlists só existem em conta:** quem está sem conta pode buscar e usar o Modo DJ, mas não salva nem lista playlists (o servidor recusa com 403 e o app convida a entrar). Playlists antigas feitas sem conta passam para a conta ao criá-la no mesmo navegador. Links públicos de playlist continuam abertos para qualquer pessoa. Não há recuperação de senha (não há e-mail): quem esquecer a senha cria outra conta.
 
-1. **Hospedagem com disco persistente** (o banco e o cache são SQLite). Em hospedagem com disco que apaga a cada
-   reinício, as playlists e links compartilhados somem. Aponte `SOULSBPM_DATA` para a pasta do disco persistente.
+1. **Onde guardar contas e playlists.** Há duas formas; escolha uma:
+   - **Banco PostgreSQL externo (recomendado no plano grátis):** defina `DATABASE_URL` com o endereço do banco
+     (por exemplo o do Neon, algo como `postgresql://usuario:senha@host/banco?sslmode=require`). Contas, perfil, histórico,
+     playlists e grafo ficam no Postgres e **não somem** quando a hospedagem reinicia. As tabelas são criadas sozinhas.
+   - **SQLite em disco persistente:** sem `DATABASE_URL`, o app usa SQLite. Em hospedagem com disco que apaga a cada
+     reinício, os dados somem; aponte `SOULSBPM_DATA` para a pasta de um disco persistente.
+   O cache das APIs de música (`cache_fontes.db`) continua em arquivo; se for apagado, ele só se refaz nas próximas buscas.
 2. **Variáveis de ambiente** (nunca suba o arquivo `.env` para o Git; o `.gitignore` já o ignora):
-   `LASTFM_API_KEY`, `GETSONGBPM_API_KEY`, `SOULSBPM_DATA=/caminho/do/disco`, `SOULSBPM_EXIGIR_LOGIN=1` (opcional), `SOULSBPM_PROXY=1` (HTTPS da hospedagem
+   `LASTFM_API_KEY`, `GETSONGBPM_API_KEY`, `DATABASE_URL` (ou `SOULSBPM_DATA=/caminho/do/disco`), `SOULSBPM_EXIGIR_LOGIN=1` (opcional), `SOULSBPM_PROXY=1` (HTTPS da hospedagem
    na frente; use o nº de proxies) e, se quiser, `SOULSBPM_BUSCAS_POR_MIN` (padrão 20 buscas/min por IP).
 3. **Comandos:** instalar com `pip install -r requirements.txt` e iniciar com `python app.py` (usa o servidor de produção
    waitress; a hospedagem define `PORT`). **Uma instância só.**

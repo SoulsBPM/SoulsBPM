@@ -69,7 +69,7 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
     catalogo = [] if (provedor and not arquivo) else json.loads(pathlib.Path(arquivo).read_text("utf-8"))
     if not db_path:
         dados.mkdir(parents=True, exist_ok=True)
-    store = Store(db_path or os.environ.get("SOULSBPM_DB", str(dados / "soulsbpm.db")))
+    store = Store(db_path or os.environ.get("DATABASE_URL") or os.environ.get("SOULSBPM_DB", str(dados / "soulsbpm.db")))
     motor = Motor(catalogo, store, provedor=provedor)
     contas = Contas(store)
     app.motor, app.store, app.contas = motor, store, contas

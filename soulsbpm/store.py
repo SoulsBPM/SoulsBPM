@@ -1,7 +1,8 @@
-"""Persistência em SQLite: perfil, histórico, playlists e grafo global.
+"""Persistência: perfil, histórico, playlists, contas e grafo global.
 
-Substitui o PostgreSQL sugerido no documento 5 só para o MVP rodar sem infraestrutura.
-O grafo global guarda apenas pares de faixas (A → B), nunca dados pessoais.
+Usa SQLite por padrão (local e testes) e PostgreSQL quando o endereço de um banco é informado
+(variável DATABASE_URL, por exemplo o Postgres do Neon). Assim as contas e playlists não somem
+quando a hospedagem reinicia. O grafo global guarda apenas pares de faixas (A → B), nunca dados pessoais.
 """
 import json
 import secrets
@@ -22,20 +23,107 @@ CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, nome TEXT UNIQUE COLLATE N
 CREATE TABLE IF NOT EXISTS auth(token TEXT PRIMARY KEY, user_id TEXT, expires REAL);
 """
 
+# Mesmo esquema para PostgreSQL: timestamps em precisão dupla, id de histórico automático e
+# usuário único sem diferenciar maiúsculas de minúsculas.
+SCHEMA_PG = """
+CREATE TABLE IF NOT EXISTS weights(user_id TEXT, key TEXT, value DOUBLE PRECISION, updated_at DOUBLE PRECISION,
+                                   PRIMARY KEY(user_id, key));
+CREATE TABLE IF NOT EXISTS history(id BIGSERIAL PRIMARY KEY, user_id TEXT, ts DOUBLE PRECISION,
+                                   type TEXT, track_id TEXT, query TEXT, fraction DOUBLE PRECISION);
+CREATE TABLE IF NOT EXISTS playlists(id TEXT PRIMARY KEY, user_id TEXT, title TEXT, tags TEXT,
+                                     track_ids TEXT, created_at DOUBLE PRECISION);
+CREATE TABLE IF NOT EXISTS graph(a TEXT, b TEXT, count INTEGER, PRIMARY KEY(a, b));
+CREATE TABLE IF NOT EXISTS tracks(id TEXT PRIMARY KEY, data TEXT, seq BIGSERIAL);
+CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, nome TEXT, hash TEXT, created_at DOUBLE PRECISION);
+CREATE UNIQUE INDEX IF NOT EXISTS users_nome_ci ON users(lower(nome));
+CREATE TABLE IF NOT EXISTS auth(token TEXT PRIMARY KEY, user_id TEXT, expires DOUBLE PRECISION);
+CREATE INDEX IF NOT EXISTS history_user ON history(user_id);
+CREATE INDEX IF NOT EXISTS playlists_user ON playlists(user_id);
+"""
+
+
+def eh_postgres(caminho):
+    return isinstance(caminho, str) and caminho.startswith(("postgres://", "postgresql://"))
+
 
 class Store:
     def __init__(self, path=":memory:"):
         self.path = path
         self._lock = threading.Lock()
+        self._pg = eh_postgres(path)
+        self._pgconn = None
         self._mem = sqlite3.connect(path, check_same_thread=False) if path == ":memory:" else None
-        with self._conn() as c:
-            c.executescript(SCHEMA)
+        if self._pg:
+            self._run_script(SCHEMA_PG)
+        else:
+            with self._conn() as c:
+                c.executescript(SCHEMA)
 
     def _conn(self):
         return self._mem if self._mem else sqlite3.connect(self.path, timeout=10)
 
+    # PostgreSQL: uma conexão reaproveitada (abrir uma a cada consulta é lento) e refeita se o banco
+    # tiver dormido ou derrubado a conexão (o Neon suspende o banco quando fica parado).
+    def _pg_conectar(self):
+        import psycopg                                  # só é necessário quando há DATABASE_URL
+        if self._pgconn is None or self._pgconn.closed:
+            self._pgconn = psycopg.connect(self.path, connect_timeout=15)
+        return self._pgconn
+
+    def _pg_fechar(self):
+        try:
+            if self._pgconn is not None:
+                self._pgconn.close()
+        except Exception:
+            pass
+        self._pgconn = None
+
+    def _run_script(self, script):
+        with self._lock:
+            for tentativa in (1, 2):
+                try:
+                    c = self._pg_conectar()
+                    c.execute(script)
+                    c.commit()
+                    return
+                except Exception as e:
+                    self._pg_fechar()
+                    if tentativa == 2 or not self._erro_de_conexao(e):
+                        raise
+
+    @staticmethod
+    def _erro_de_conexao(e):
+        import psycopg
+        return isinstance(e, (psycopg.OperationalError, psycopg.InterfaceError))
+
+    def _run_pg(self, sql, args, many, fetch):
+        sql = sql.replace("?", "%s")
+        for tentativa in (1, 2):
+            try:
+                c = self._pg_conectar()
+                with c.cursor() as cur:
+                    if many:
+                        cur.executemany(sql, args)
+                    else:
+                        cur.execute(sql, args)
+                    rows = cur.fetchall() if fetch else None
+                c.commit()
+                return rows
+            except Exception as e:
+                try:
+                    if self._pgconn is not None and not self._pgconn.closed:
+                        self._pgconn.rollback()
+                except Exception:
+                    pass
+                if tentativa == 1 and self._erro_de_conexao(e):
+                    self._pg_fechar()                    # banco dormiu: reconecta e tenta de novo
+                    continue
+                raise
+
     def _run(self, sql, args=(), many=False, fetch=False):
         with self._lock:
+            if self._pg:
+                return self._run_pg(sql, args, many, fetch)
             c = self._conn()
             try:
                 cur = c.executemany(sql, args) if many else c.execute(sql, args)
@@ -85,7 +173,7 @@ class Store:
         self._run("INSERT INTO playlists VALUES(?,?,?,?,?,?)",
                   (pid, uid, title, json.dumps(tags, ensure_ascii=False), json.dumps(track_ids), time.time()))
         pares = [(a, b) for a, b in zip(track_ids, track_ids[1:])]
-        self._run("INSERT INTO graph VALUES(?,?,1) ON CONFLICT(a,b) DO UPDATE SET count=count+1",
+        self._run("INSERT INTO graph VALUES(?,?,1) ON CONFLICT(a,b) DO UPDATE SET count=graph.count+1",
                   pares, many=True)
         return pid
 
@@ -104,11 +192,12 @@ class Store:
 
     # faixas reais descobertas no modo ao vivo (só metadados) ------------------
     def save_tracks(self, faixas):
-        self._run("INSERT OR REPLACE INTO tracks VALUES(?,?)",
+        self._run("INSERT INTO tracks(id,data) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data",
                   [(f["id"], json.dumps(f, ensure_ascii=False)) for f in faixas], many=True)
 
     def load_tracks(self):
-        return [json.loads(r[0]) for r in self._run("SELECT data FROM tracks ORDER BY rowid", fetch=True)]
+        ordem = "seq" if self._pg else "rowid"
+        return [json.loads(r[0]) for r in self._run(f"SELECT data FROM tracks ORDER BY {ordem}", fetch=True)]
 
     def graph_count(self, a, b):
         rows = self._run("SELECT count FROM graph WHERE a=? AND b=?", (a, b), fetch=True)

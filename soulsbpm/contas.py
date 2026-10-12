@@ -51,7 +51,7 @@ class Contas:
 
     def entrar(self, nome, senha):
         nome = nome.strip() if isinstance(nome, str) else ""
-        rows = self.store._run("SELECT id,nome,hash FROM users WHERE nome=?", (nome,), fetch=True) if nome else []
+        rows = self.store._run("SELECT id,nome,hash FROM users WHERE lower(nome)=lower(?)", (nome,), fetch=True) if nome else []
         if not isinstance(senha, str) or len(senha) > SENHA_MAX:
             senha = ""
         if rows:
