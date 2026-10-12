@@ -156,14 +156,71 @@ async function saidaOk() {
 }
 
 
-/* botão "Ouvir": o app não toca áudio; abre a busca da faixa (artista + título) no Spotify ou no YouTube, em outra aba */
+/* botão "Ouvir": o app não toca áudio; abre a busca da faixa (artista + título) no app do Spotify ou do YouTube; sem o app instalado, abre o site */
 const LOGO_SP = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#1db954"/><path d="M6.2 9.2c3.8-1.1 8.2-.8 11.6 1.2M6.9 12.4c3.2-.9 6.8-.6 9.6 1M7.6 15.4c2.5-.6 5.2-.4 7.4.8" fill="none" stroke="#0e0d1c" stroke-width="1.7" stroke-linecap="round"/></svg>';
 const LOGO_YT = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="4.5" width="22" height="15" rx="4.5" fill="#ff3b30"/><path d="m10 9 5.2 3-5.2 3z" fill="#fff"/></svg>';
+const PLAT = (() => {
+  const ua = navigator.userAgent || "";
+  if (/Android/i.test(ua)) return "android";
+  if (/iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) return "ios";
+  return "desktop";
+})();
+
+/* Endereço para abrir direto no aplicativo (ou null quando não há como tentar o app nessa plataforma).
+   - Android: "intent:" com a página web como reserva; o próprio Chrome cai no site se o app não estiver instalado.
+   - iOS e PC: esquema do app (spotify:, youtube://); quem cuida da reserva é abrirNoApp(). O YouTube não tem app de PC. */
+function enderecoApp(servico, q, web) {
+  const fallback = encodeURIComponent(web);
+  if (servico === "sp") {
+    if (PLAT === "android") return { url: `intent:search:${q}#Intent;scheme=spotify;package=com.spotify.music;S.browser_fallback_url=${fallback};end`, nativo: true };
+    return { url: `spotify:search:${q}`, nativo: false };
+  }
+  if (PLAT === "android") return { url: `intent://www.youtube.com/results?search_query=${q}#Intent;scheme=https;package=com.google.android.youtube;S.browser_fallback_url=${fallback};end`, nativo: true };
+  if (PLAT === "ios") return { url: `youtube://www.youtube.com/results?search_query=${q}`, nativo: false };
+  return null;
+}
+
+/* Tenta abrir o app; se nada acontecer (app não instalado), abre o site. */
+function abrirNoApp(url, web) {
+  let abriu = false;
+  const marca = () => { abriu = true; };
+  const onVis = () => { if (document.hidden) marca(); };
+  window.addEventListener("blur", marca);
+  window.addEventListener("pagehide", marca);
+  document.addEventListener("visibilitychange", onVis);
+  if (PLAT === "desktop") {                                 // iframe escondido: não derruba a página se o esquema não existir
+    const f = document.createElement("iframe");
+    f.style.display = "none"; f.src = url;
+    document.body.appendChild(f);
+    setTimeout(() => f.remove(), 3000);
+  } else {
+    location.href = url;
+  }
+  setTimeout(() => {
+    window.removeEventListener("blur", marca);
+    window.removeEventListener("pagehide", marca);
+    document.removeEventListener("visibilitychange", onVis);
+    if (!abriu) { if (!window.open(web, "_blank", "noopener")) location.href = web; }
+  }, 1200);
+}
+
+document.addEventListener("click", e => {
+  const a = e.target.closest("a.ouv[data-app]");
+  if (!a || e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  if (a.dataset.nativo === "1") location.href = a.dataset.app;      // Android: o navegador resolve app ou site sozinho
+  else abrirNoApp(a.dataset.app, a.href);
+});
+
 function ouvir(f) {
   const q = encodeURIComponent(`${f.artista} ${f.titulo}`.trim());
   const nome = `${f.titulo}, ${f.artista}`;
-  const link = (cls, rot, logo, url) => `<a class="ouv ${cls}" href="${url}" target="_blank" rel="noopener noreferrer"
-    aria-label="Ouvir ${esc(nome)} no ${rot} (abre em outra aba)" title="Ouvir no ${rot}">${logo}</a>`;
+  const link = (cls, rot, logo, web) => {
+    const app = enderecoApp(cls, q, web);
+    const dados = app ? ` data-app="${esc(app.url)}" data-nativo="${app.nativo ? 1 : 0}"` : "";
+    return `<a class="ouv ${cls}" href="${web}"${dados} target="_blank" rel="noopener noreferrer"
+    aria-label="Ouvir ${esc(nome)} no ${rot}" title="Ouvir no ${rot}">${logo}</a>`;
+  };
   return `<span class="ouvir" role="group" aria-label="Ouvir ${esc(nome)}"><span class="ouvir-t">${ic("ouvir")}Ouvir</span>${
     link("sp", "Spotify", LOGO_SP, "https://open.spotify.com/search/" + q)}${link("yt", "YouTube", LOGO_YT, "https://www.youtube.com/results?search_query=" + q)}</span>`;
 }
