@@ -168,7 +168,7 @@ const PLAT = (() => {
 
 /* Endereço para abrir direto no aplicativo (ou null quando não há como tentar o app nessa plataforma).
    - Spotify no Android: "intent:" com a página web como reserva; o navegador cai no site se o app não estiver instalado.
-   - YouTube no Android: sem endereço próprio, vale o link https normal (o Brave recusa "intent://" do YouTube).
+   - YouTube no Android: esquema vnd.youtube:// (o Brave recusa "intent://" e não abre o app por link https).
    - iOS e PC: esquema do app (spotify:, youtube://); quem cuida da reserva é abrirNoApp(). O YouTube não tem app de PC. */
 function enderecoApp(servico, q, web) {
   const fallback = encodeURIComponent(web);
@@ -176,7 +176,7 @@ function enderecoApp(servico, q, web) {
     if (PLAT === "android") return { url: `intent:search:${q}#Intent;scheme=spotify;package=com.spotify.music;S.browser_fallback_url=${fallback};end`, nativo: true };
     return { url: `spotify:search:${q}`, nativo: false };
   }
-  if (PLAT === "android") return null;                       // link comum: o Android abre o app do YouTube sozinho (App Link) e, sem o app, carrega o site
+  if (PLAT === "android") return { url: `vnd.youtube://www.youtube.com/results?search_query=${q}`, nativo: false };   // esquema do app; o Brave não abre o app por link https nem por intent://
   if (PLAT === "ios") return { url: `youtube://www.youtube.com/results?search_query=${q}`, nativo: false };
   return null;
 }
@@ -189,7 +189,7 @@ function abrirNoApp(url, web) {
   window.addEventListener("blur", marca);
   window.addEventListener("pagehide", marca);
   document.addEventListener("visibilitychange", onVis);
-  if (PLAT === "desktop") {                                 // iframe escondido: não derruba a página se o esquema não existir
+  if (PLAT !== "ios") {                                     // iframe escondido: não derruba a página se o esquema não existir (PC e Android)
     const f = document.createElement("iframe");
     f.style.display = "none"; f.src = url;
     document.body.appendChild(f);
