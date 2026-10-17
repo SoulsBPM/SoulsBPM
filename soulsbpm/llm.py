@@ -130,6 +130,7 @@ class InterpretadorIA:
         self.provedor, self._chave, self.modelo = provedor, chave, modelo or padrao
         self._http, self.timeout = http or self._http_real, timeout
         self._cache, self._cache_max = OrderedDict(), cache_max
+        self._cache_livre = OrderedDict()                # respostas de `completar` (texto livre)
         self._lock = threading.Lock()
         self._falhas, self._falhas_max, self._pausa, self._agora = 0, falhas_max, pausa, agora
         self._pausado_ate = 0.0
@@ -176,6 +177,49 @@ class InterpretadorIA:
             while len(self._cache) > self._cache_max:
                 self._cache.popitem(last=False)
         return dict(r)
+
+    def _corpo_livre(self, sistema, usuario, max_tokens, temperatura):
+        if self.formato == "anthropic":
+            corpo = {"model": self.modelo, "max_tokens": max_tokens, "system": sistema,
+                     "messages": [{"role": "user", "content": usuario}]}
+            if temperatura:                              # como em `_corpo`, sem temperatura quando é 0
+                corpo["temperature"] = temperatura
+            return corpo
+        # modelos que "pensam" gastam parte do limite raciocinando: damos folga, como em `_corpo`
+        return {"model": self.modelo, "max_tokens": max(max_tokens, 1500), "temperature": temperatura,
+                "messages": [{"role": "system", "content": sistema}, {"role": "user", "content": usuario}]}
+
+    def completar(self, sistema, usuario, max_tokens=400, temperatura=0.0):
+        """Chamada livre ao modelo: devolve o texto da resposta, ou None se falhar.
+
+        Usa o mesmo cache, a mesma pausa e a mesma proteção contra falhas em sequência do interpretador,
+        então quem chama sempre tem uma reserva (o app nunca depende da IA para responder)."""
+        chave_cache = (sistema, _normalizar(usuario), temperatura)
+        if not _normalizar(usuario):
+            return None
+        with self._lock:
+            if chave_cache in self._cache_livre:
+                self._cache_livre.move_to_end(chave_cache)
+                return self._cache_livre[chave_cache]
+            if self._agora() < self._pausado_ate:
+                return None
+        try:
+            resp = self._http(self._corpo_livre(sistema, usuario, max_tokens, temperatura), self._chave, self.timeout)
+            texto = _texto_da_resposta(resp).strip()
+            if not texto:
+                raise ValueError("resposta vazia")
+        except urllib.error.HTTPError as e:
+            self._falhou(f"HTTP {e.code}")
+            return None
+        except Exception as e:
+            self._falhou(type(e).__name__)
+            return None
+        with self._lock:
+            self._falhas = 0
+            self._cache_livre[chave_cache] = texto
+            while len(self._cache_livre) > self._cache_max:
+                self._cache_livre.popitem(last=False)
+        return texto
 
     def _falhou(self, motivo):
         with self._lock:

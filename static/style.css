@@ -259,6 +259,10 @@ input.tag-in{width:140px;padding:7px 12px;font-size:15px;border-radius:var(--r-c
 .roda{width:96px;height:96px}
 .nota-risco{font-size:15px;color:var(--erro-txt);margin-top:12px}
 .deck-ia .btn.troca{margin-top:16px;width:100%}
+.deck-ia .btn.troca + .btn.troca{margin-top:10px}
+.narra{margin:14px 0 0;padding:10px 14px;background:var(--painel-2);border-left:3px solid var(--indigo);border-radius:var(--r-ctl);font-size:16px;line-height:1.45;color:var(--texto)}
+.narra[hidden]{display:none}
+.narra-regras{border-left-color:var(--linha-forte);color:var(--mudo)}
 .dica{background:var(--painel);border:1px solid var(--ambar);border-radius:var(--r-painel);padding:14px 16px}
 .dica p{margin:4px 0 12px;color:var(--mudo)}
 details.dev{font-size:13px;color:var(--apagado)}

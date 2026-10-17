@@ -489,6 +489,8 @@ function telaDJ(d, aviso) {
             <span class="en-l">${energia(p.energia)} ${e10(p.energia)}</span></div>
           ${p.motivos?.length ? `<div class="motivos so-tec"><div><div class="t">Por que a IA sugeriu</div><ul>${p.motivos.map(m => `<li>${esc(m)}</li>`).join("")}</ul></div>${roda(a.tom, p.tom)}</div>` : ""}
           ${p.arriscada ? `<p class="nota-risco">Não achei faixa com BPM e chave bem próximos; esta é a mais perto disso.</p>` : ""}
+          <p class="narra" id="narra" aria-live="polite" hidden></p>
+          <button class="btn btn-sec troca" id="b-explicar" type="button">${ic("sparkle")} Explicar com IA</button>
           <button class="btn btn-sec troca" id="b-trocar" type="button">${ic("swap")} Trocar sugestão</button>`
           : `<div class="aviso">Acabaram as sugestões para esta vibe. Salve a sequência ou faça uma nova busca.</div>`}
         </div>
@@ -519,6 +521,18 @@ function telaDJ(d, aviso) {
   $("#b-bpm-menos").onclick = () => chama("bpm", { delta: -5 });
   $("#b-bpm-auto")?.addEventListener("click", () => chama("bpm", { auto: true }));
   $("#b-trocar")?.addEventListener("click", () => chama("skip", { target: "sugestao" }));
+  $("#b-explicar")?.addEventListener("click", async () => {     // a IA (ou, sem IA, as regras) explica a transição
+    const b = $("#b-explicar"), box = $("#narra");
+    b.disabled = true; box.hidden = false; box.className = "narra"; box.textContent = "Pensando…";
+    try {
+      const r = await api("POST", `/api/session/${S.sid}/explain`);
+      box.textContent = r.texto;                                  // textContent: nada vindo do servidor vira HTML
+      box.classList.add(r.origem === "ia" ? "narra-ia" : "narra-regras");
+      box.title = r.origem === "ia" ? "Explicação escrita por IA a partir dos dados da transição"
+                                    : "Resumo feito pelas regras do app (IA indisponível agora)";
+    } catch (e) { box.hidden = true; toast(e.message); }
+    finally { b.disabled = false; }
+  });
   $("#b-faixa-ant").onclick = () => chama("back");
   $("#b-pular").onclick = () => chama("skip", { target: "atual", elapsed_fraction: fracao() });
   $("#b-curtir").onclick = async () => {

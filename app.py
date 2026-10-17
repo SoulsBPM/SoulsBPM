@@ -16,8 +16,10 @@ from flask import Flask, g, jsonify, make_response, request, send_from_directory
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+from soulsbpm import embeddings as embeddings_mod
 from soulsbpm import feedback, musicfinder
 from soulsbpm.aovivo import provedor_do_ambiente
+from soulsbpm.aprendizado import Aprendizado
 from soulsbpm.contas import COOKIE, SESSAO_DIAS, Contas
 from soulsbpm.engine import Erro, Motor
 from soulsbpm.limite import LimiteJanela
@@ -53,6 +55,18 @@ def carregar_env(arquivo=None):
             os.environ.setdefault(k.strip(), v)
 
 
+def _desligado(nome):
+    """True se a variável de ambiente pede para desligar o recurso (0, false, não, off)."""
+    return (os.environ.get(nome) or "").strip().lower() in ("0", "false", "nao", "não", "off")
+
+
+def _inteiro(nome, padrao):
+    try:
+        return int(os.environ.get(nome) or padrao)
+    except ValueError:
+        return padrao
+
+
 def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto=None):
     app = Flask(__name__, static_folder=str(RAIZ / "static"), static_url_path="/static")
     proxies = int(os.environ.get("SOULSBPM_PROXY", 0) or 0)       # nº de proxies de confiança na frente (HTTPS da hospedagem)
@@ -62,12 +76,15 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
     limite_busca = LimiteJanela(buscas_por_minuto or int(os.environ.get("SOULSBPM_BUSCAS_POR_MIN", 20)))
     arquivo = catalog_path or os.environ.get("SOULSBPM_CATALOG")
     musicfinder.configurar_ia(None)
+    ia_ativa, embeddings = None, None
     if provedor is None and not arquivo:                 # com as duas chaves no ambiente, liga o modo ao vivo
         dados.mkdir(parents=True, exist_ok=True)
         provedor = provedor_do_ambiente(dados)
         ia = llm_do_ambiente()                                          # MusicFinder por IA (opcional)
         if provedor is not None and ia:
             musicfinder.configurar_ia(ia)
+            ia_ativa = ia                                               # também sugere artistas e narra transições
+            embeddings = embeddings_mod.do_ambiente()                   # similaridade semântica (opcional)
         if provedor is None:
             raise SemChaves(MSG_SEM_CHAVES)
     # modo ao vivo parte vazio (as faixas reais chegam a cada busca); com arquivo próprio usa só as faixas dele
@@ -75,9 +92,13 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
     if not db_path:
         dados.mkdir(parents=True, exist_ok=True)
     store = Store(db_path or os.environ.get("DATABASE_URL") or os.environ.get("SOULSBPM_DB", str(dados / "soulsbpm.db")))
-    motor = Motor(catalogo, store, provedor=provedor)
+    aprendizado = None if _desligado("SOULSBPM_APRENDER") else Aprendizado(store)   # pesos aprendidos com o feedback
+    artistas_ia = _inteiro("SOULSBPM_IA_ARTISTAS", 3)                               # 0 desliga a sugestão de artistas
+    motor = Motor(catalogo, store, provedor=provedor, ia=ia_ativa, embeddings=embeddings, aprendizado=aprendizado,
+                  max_artistas_ia=artistas_ia)
     contas = Contas(store)
-    app.motor, app.store, app.contas = motor, store, contas
+    app.motor, app.store, app.contas, app.aprendizado = motor, store, contas, aprendizado
+    limite_ia = LimiteJanela(_inteiro("SOULSBPM_IA_POR_MIN", 30))                   # explicações por IA, por IP
     exigir_login = os.environ.get("SOULSBPM_EXIGIR_LOGIN", "").lower() in ("1", "true", "sim")   # sem conta, nada funciona
     limite_auth = LimiteJanela(int(os.environ.get("SOULSBPM_LOGINS_POR_MIN", 10)))                # contra tentativa de senha
 
@@ -177,7 +198,17 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
 
     @app.get("/api/health")
     def health():
-        return {"ok": True, "faixas": len(motor.catalogo), "ao_vivo": bool(provedor), "ia": musicfinder.ia_ativa(), "ia_provedor": musicfinder.ia_nome()}
+        return {"ok": True, "faixas": len(motor.catalogo), "ao_vivo": bool(provedor), "ia": musicfinder.ia_ativa(), "ia_provedor": musicfinder.ia_nome(),
+                "embeddings": embeddings is not None, "sugere_artistas": ia_ativa is not None and artistas_ia > 0,
+                "aprende": aprendizado is not None}
+
+    @app.get("/api/modelo")
+    def modelo():
+        """O que a IA do app está fazendo agora: recursos ligados e os pesos da nota (manuais x aprendidos)."""
+        return jsonify({"recursos": {"interpreta_vibe": musicfinder.ia_ativa(), "sugere_artistas": ia_ativa is not None and artistas_ia > 0,
+                                     "narra_transicoes": motor.narrador.ativo, "embeddings": embeddings is not None,
+                                     "aprende_pesos": aprendizado is not None},
+                        "aprendizado": aprendizado.estado() if aprendizado else None})
 
     @app.post("/api/search")
     def search():
@@ -210,6 +241,12 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
     @app.post("/api/session/<sid>/back")
     def back(sid):
         return jsonify(motor.voltar(sid))
+
+    @app.post("/api/session/<sid>/explain")
+    def explain(sid):
+        if not limite_ia.permite(request.remote_addr):
+            raise Erro("Muitos pedidos de explicação em pouco tempo. Espere um minuto e tente de novo.", 429)
+        return jsonify(motor.explicar(sid))
 
     @app.post("/api/session/<sid>/like")
     def like(sid):

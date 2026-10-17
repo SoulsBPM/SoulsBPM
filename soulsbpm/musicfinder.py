@@ -51,6 +51,7 @@ GENEROS = {
     "forro": ["forro"], "instrumental": ["instrumental"],
 }
 TECNICOS = {"bpm", "camelot", "tom", "harmonic*", "harmonica", "tonalidade"}
+PESO_SEMANTICA = 0.35       # parte da nota de vibe que vem dos embeddings (o resto: tags, energia e gênero)
 
 _ANTI_NEGACAO = {"sem", "nao"}
 
@@ -117,6 +118,11 @@ def configurar_ia(interpretador):
 
 def ia_ativa() -> bool:
     return _ia is not None
+
+
+def ia_atual():
+    """O interpretador por IA em uso (ou None). Outros recursos de IA (artistas, narração) reaproveitam o mesmo."""
+    return _ia
 
 
 def ia_nome():
@@ -195,7 +201,11 @@ def vibe_score(faixa: dict, interp: dict) -> float:
     usados = [(s, w) for s, w in pesos if s is not None]
     if not usados:
         return 0.0
-    return sum(s * w for s, w in usados) / sum(w for _, w in usados)
+    base = sum(s * w for s, w in usados) / sum(w for _, w in usados)
+    sem = interp.get("semantica")                           # embeddings da busca (soulsbpm.embeddings), se houver
+    if sem is not None:                                     # faixa fora do grupo analisado fica neutra (0,5)
+        base = (1 - PESO_SEMANTICA) * base + PESO_SEMANTICA * sem.get(faixa["id"], 0.5)
+    return base
 
 
 def buscar(catalogo: list, interp: dict, limite: int = 10, minimo: float = 0.4) -> list:

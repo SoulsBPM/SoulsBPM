@@ -21,6 +21,12 @@ CREATE TABLE IF NOT EXISTS graph(a TEXT, b TEXT, count INTEGER, PRIMARY KEY(a, b
 CREATE TABLE IF NOT EXISTS tracks(id TEXT PRIMARY KEY, data TEXT);
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, nome TEXT UNIQUE COLLATE NOCASE, hash TEXT, created_at REAL);
 CREATE TABLE IF NOT EXISTS auth(token TEXT PRIMARY KEY, user_id TEXT, expires REAL);
+CREATE TABLE IF NOT EXISTS transicoes(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, ts REAL, tipo TEXT,
+                                      prev_id TEXT, cand_id TEXT, x_vibe REAL, x_bpm REAL, x_tom REAL,
+                                      x_energia REAL, y INTEGER, peso REAL);
+CREATE INDEX IF NOT EXISTS history_user ON history(user_id);
+CREATE INDEX IF NOT EXISTS playlists_user ON playlists(user_id);
+CREATE INDEX IF NOT EXISTS transicoes_user ON transicoes(user_id);
 """
 
 # Mesmo esquema para PostgreSQL: timestamps em precisão dupla, id de histórico automático e
@@ -37,8 +43,13 @@ CREATE TABLE IF NOT EXISTS tracks(id TEXT PRIMARY KEY, data TEXT, seq BIGSERIAL)
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, nome TEXT, hash TEXT, created_at DOUBLE PRECISION);
 CREATE UNIQUE INDEX IF NOT EXISTS users_nome_ci ON users(lower(nome));
 CREATE TABLE IF NOT EXISTS auth(token TEXT PRIMARY KEY, user_id TEXT, expires DOUBLE PRECISION);
+CREATE TABLE IF NOT EXISTS transicoes(id BIGSERIAL PRIMARY KEY, user_id TEXT, ts DOUBLE PRECISION, tipo TEXT,
+                                      prev_id TEXT, cand_id TEXT, x_vibe DOUBLE PRECISION, x_bpm DOUBLE PRECISION,
+                                      x_tom DOUBLE PRECISION, x_energia DOUBLE PRECISION, y INTEGER,
+                                      peso DOUBLE PRECISION);
 CREATE INDEX IF NOT EXISTS history_user ON history(user_id);
 CREATE INDEX IF NOT EXISTS playlists_user ON playlists(user_id);
+CREATE INDEX IF NOT EXISTS transicoes_user ON transicoes(user_id);
 """
 
 
@@ -146,6 +157,7 @@ class Store:
 
     def reset_profile(self, uid):
         self._run("DELETE FROM weights WHERE user_id=?", (uid,))
+        self.delete_transicoes(uid)                      # o que o app aprendeu sobre a pessoa inclui os exemplos de treino
 
     # histórico ----------------------------------------------------------
     def add_history(self, uid, type_, track_id=None, query=None, fraction=None, ts=None):
@@ -166,6 +178,26 @@ class Store:
 
     def delete_history(self, uid):
         self._run("DELETE FROM history WHERE user_id=?", (uid,))
+        self.delete_transicoes(uid)
+
+    # transições avaliadas (exemplos de treino dos pesos; ver soulsbpm/aprendizado.py) ----------
+    def add_transicao(self, uid, tipo, prev_id, cand_id, x, y, peso, ts=None):
+        self._run("INSERT INTO transicoes(user_id,ts,tipo,prev_id,cand_id,x_vibe,x_bpm,x_tom,x_energia,y,peso) "
+                  "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                  (uid, ts or time.time(), tipo, prev_id, cand_id, *x, y, peso))
+
+    def remove_transicao(self, uid, tipo, prev_id, cand_id):
+        """Apaga só o registro mais recente igual a este (usado quando a pessoa desfaz o gesto)."""
+        self._run("DELETE FROM transicoes WHERE id=(SELECT MAX(id) FROM transicoes "
+                  "WHERE user_id=? AND tipo=? AND prev_id=? AND cand_id=?)", (uid, tipo, prev_id, cand_id))
+
+    def transicoes(self, limite):
+        """Os exemplos mais recentes: (x_vibe, x_bpm, x_tom, x_energia, y, peso)."""
+        return [tuple(r) for r in self._run(
+            "SELECT x_vibe,x_bpm,x_tom,x_energia,y,peso FROM transicoes ORDER BY id DESC LIMIT ?", (limite,), fetch=True)]
+
+    def delete_transicoes(self, uid):
+        self._run("DELETE FROM transicoes WHERE user_id=?", (uid,))
 
     # playlists e grafo ---------------------------------------------------
     def save_playlist(self, uid, title, tags, track_ids):

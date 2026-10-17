@@ -225,6 +225,32 @@ class AoVivo:
         pontos = {f["id"]: pesos[(f["artista"], f["titulo"])] for f in faixas}
         return oficial, pontos, faixas
 
+    def candidatas_sugeridas(self, nomes, interp, max_artistas=3, por_artista=8):
+        """Faixas dos artistas que a IA sugeriu para a vibe. Cada nome é confirmado no Last.fm (nome quase igual,
+        senão é descartado: barra artista inventado) e todas as músicas são resolvidas de uma vez no GetSongBPM.
+        As faixas herdam as tags e gêneros da vibe, porque o artista foi escolhido para ela."""
+        por_faixa, ordem, aceitos = {}, [], 0
+        for nome in nomes:
+            if aceitos >= max_artistas:
+                break
+            try:
+                oficial = self.lastfm.buscar_artista(nome)
+                if not oficial or SequenceMatcher(None, _slug(nome), _slug(oficial)).ratio() < 0.8:
+                    log.info("IA sugeriu %r: não confirmado no Last.fm, descartado", nome)
+                    continue
+                musicas = self.lastfm.top_tracks_artista(oficial, por_artista)
+            except FonteErro as e:
+                log.warning("Last.fm: %s (sugestão %r ignorada)", e, nome)
+                continue
+            if not musicas:
+                continue
+            aceitos += 1
+            for chave in musicas:
+                if chave not in por_faixa:
+                    por_faixa[chave] = {"tags": list(interp["tags"]), "generos": list(interp["generos"])}
+                    ordem.append(chave)
+        return self._resolver(ordem, por_faixa) if ordem else []
+
     def _enriquecer(self, artista, titulo, d):
         dados = self.bpm.buscar(artista, titulo)
         if not dados:

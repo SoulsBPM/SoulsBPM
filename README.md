@@ -30,16 +30,40 @@ uma faixa leva à outra de forma natural, como um DJ faria, e aprende com o que 
 A nota de cada candidata é `0,35·vibe + 0,25·BPM + 0,25·tom + 0,15·energia`, ajustada pelo perfil aprendido. Com BPM alvo,
 entra o termo de **rumo** (o quanto a faixa aproxima o set do alvo) e os pesos passam a
 `0,08 vibe + 0,24 BPM + 0,15 tom + 0,08 energia + 0,45 rumo`. É um recomendador por regras e pontuação, explicável,
-e não uma “caixa-preta”. A IA de linguagem, quando ligada, só ajuda a interpretar a frase da busca.
+e não uma “caixa-preta”. Os pesos `0,35 / 0,25 / 0,25 / 0,15` são o ponto de partida: com dados suficientes o app os
+recalibra com uma regressão logística (ver *Onde entra a IA*). A IA de linguagem ajuda a interpretar a busca, sugerir
+artistas e explicar a transição, mas não escolhe a ordem.
 
 Feedback e peso no perfil: curtir +1,0 · salvar +1,5 · aceitar +0,5 · pular depois da metade −0,3 · pular antes −1,0.
 Os pesos perdem força com o tempo (meia-vida de 30 dias) e quem é novo começa neutro.
+
+## Onde entra a IA
+
+Quatro recursos, todos **opcionais e com reserva**: sem chave, sem rede ou com qualquer erro, o app volta a funcionar como antes.
+
+| Recurso | O que faz | Precisa de |
+|---|---|---|
+| **Interpretar a vibe** | Um modelo de linguagem traduz a frase em tags, energia e gêneros (resposta validada contra listas fixas). | uma chave de IA (Gemini, Groq, OpenRouter ou Anthropic) |
+| **Sugerir artistas** | O modelo propõe até 6 artistas para a vibe. Cada nome é **confirmado no Last.fm** (nome quase igual, senão é descartado, o que barra artista inventado) e só entra música com BPM e tom na GetSongBPM. | a mesma chave de IA |
+| **Embeddings de vibe** | Mede a proximidade de *significado* entre a frase e cada música (cosseno entre vetores) e entra com 35% na nota de vibe. Entende frases que não usam nenhuma palavra do léxico. | chave do Gemini ou do OpenRouter |
+| **Explicar a transição** | O botão **Explicar com IA** pede ao modelo 1–2 frases sobre por que a próxima faixa combina. A IA só reescreve os fatos que as regras já calcularam; sem IA, a frase sai das regras. | a mesma chave de IA |
+| **Aprender os pesos** | Cada aceite, curtida, salvamento e pulo vira um exemplo (vibe, BPM, tom, energia → gostou ou não). Uma **regressão logística** (Python puro, sem biblioteca) calibra o peso de cada critério. | nada (liga sozinha) |
+
+O ranking continua sendo feito pelas regras e pela nota explicável. A IA propõe candidatos, mede significado e escreve o texto; quem escolhe a ordem é a fórmula.
+
+**Como o aprendizado é protegido de dar errado:** só treina com pelo menos 40 exemplos e 10 de cada tipo (aceite e pulo); entra misturado com os pesos manuais, em proporção `n / (n + 150)`; peso negativo vira zero e a soma continua 1,0; com BPM alvo definido a fórmula é outra e esses gestos não contam. Os 4 pesos valem para todos (não há modelo por pessoa). `GET /api/modelo` mostra os pesos manuais, os aprendidos e quantos exemplos existem. Apagar o histórico ou zerar o perfil apaga também os exemplos da pessoa.
+
+**Limites honestos:** os embeddings usam só "título + artista" (não ouvem o áudio nem leem a letra), então o sinal é fraco para faixas obscuras. O app só vê o que ele mesmo sugeriu, então o aprendizado tem viés de seleção; por isso é um ajuste fino sobre o prior manual, não uma troca da fórmula. A IA pode sugerir um artista que existe mas não combina; a checagem garante que ele existe, não que acertou o gosto.
 
 ## Privacidade
 
 - O app guarda só **metadados** (artista, título, BPM, tom). Nenhum áudio.
 - A senha é guardada apenas como hash scrypt com sal; a sessão é um cookie `HttpOnly`.
 - O texto da busca é enviado ao provedor de IA de linguagem, quando ligado. Não vai nome, conta nem histórico.
+  Com embeddings, também vão ao provedor o texto da busca e "título + artista" das faixas encontradas. Na explicação,
+  vão título, artista, BPM, tom e energia das duas faixas.
+- Para o aprendizado de pesos, o app guarda por gesto 4 números (0 a 1) e o resultado, ligados ao seu código de
+  usuário só para poderem ser apagados com o histórico.
 - Não há recuperação de senha: quem esquecer cria outra conta.
 
 ## Créditos
@@ -66,7 +90,7 @@ pip install -r requirements.txt
 #   LASTFM_API_KEY=sua_chave
 #   GETSONGBPM_API_KEY=sua_chave
 python app.py               # http://localhost:5000
-python -m unittest discover -s tests -t .   # 176 testes
+python -m unittest discover -s tests -t .   # 253 testes
 ```
 
 No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e `python3`.
@@ -79,6 +103,10 @@ No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e
 | `LASTFM_API_KEY`, `GETSONGBPM_API_KEY` | **Obrigatórias.** Sem elas o app não abre. |
 | `GEMINI_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY` | Opcional: liga a IA de linguagem na busca (vale a primeira da lista; `SOULSBPM_IA_PROVEDOR` e `SOULSBPM_MODELO_IA` ajustam). |
 | `DATABASE_URL` | PostgreSQL (ex.: Neon). Sem ela, usa SQLite em `data/soulsbpm.db`. |
+| `SOULSBPM_IA_ARTISTAS` | Quantos artistas sugeridos pela IA entram por busca (padrão 3; `0` desliga). |
+| `SOULSBPM_EMBEDDINGS=0`, `SOULSBPM_MODELO_EMB` | Desliga os embeddings / troca o modelo (padrão `gemini-embedding-001` ou `openai/text-embedding-3-small`). |
+| `SOULSBPM_APRENDER=0` | Desliga o aprendizado dos pesos (volta aos pesos manuais). |
+| `SOULSBPM_IA_POR_MIN` | Limite por IP de explicações por IA (padrão 30 por minuto). |
 | `SOULSBPM_DATA` | Pasta do SQLite e do cache, para disco persistente. |
 | `SOULSBPM_EXIGIR_LOGIN=1` | Exige conta para tudo (links de playlist continuam abertos). |
 | `SOULSBPM_PROXY=1` | Nº de proxies na frente (HTTPS da hospedagem). |
@@ -98,7 +126,7 @@ todos os visitantes juntos; o app para em 2500/h e passa a usar só o cache.
 
 ```
 app.py               servidor Flask (rotas, login, limites)
-soulsbpm/            engine (estados), dj (ranking), feedback, musicfinder, llm,
+soulsbpm/            engine (estados), dj (ranking), feedback, musicfinder, llm, sugestor, embeddings, narrador, aprendizado,
                      aovivo/fontes (Last.fm e GetSongBPM), contas, store (SQLite/Postgres), limite
 static/              interface (index, login, app.js, CSS, fontes)
 tests/               testes automatizados (unittest)
@@ -117,6 +145,8 @@ tools/               diagnósticos das APIs e importador de catálogo
 | `POST /api/session/<id>/like` · `/adjust` `{direction}` · `/save` `{title, tags}` | Curtir (de novo descurte), ajustar a vibe, salvar |
 | `GET /api/playlists` · `/api/playlists/<id>` · `POST /api/playlists/<id>/continue` | Playlists |
 | `GET/DELETE /api/profile` · `GET/DELETE /api/history` | Privacidade |
+| `POST /api/session/<id>/explain` | Explica em linguagem natural por que a faixa sugerida combina (IA ou regras) |
+| `GET /api/modelo` | Recursos de IA ligados e os pesos da nota (manuais x aprendidos) |
 | `GET /api/health` | Estado do app (chaves, IA) |
 
 ## Limitações

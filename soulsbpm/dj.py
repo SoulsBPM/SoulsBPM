@@ -131,9 +131,12 @@ def explicar(prev: dict, cand: dict, t: dict, vibe: float, alvo=None) -> list:
     return m
 
 
-def rank_next(prev: dict, candidatos: list, vibe_fn, bonus_fn=None, alvo=None) -> list:
+def rank_next(prev: dict, candidatos: list, vibe_fn, bonus_fn=None, alvo=None, pesos=None) -> list:
     """Ordena candidatos por nota (maior primeiro). Cada item traz a explicação da nota.
-    `alvo` = BPM que o DJ quer atingir; sem ele vale a fórmula original."""
+    `alvo` = BPM que o DJ quer atingir; sem ele vale a fórmula original.
+    `pesos` = (vibe, BPM, tom, energia) aprendidos (soulsbpm/aprendizado.py); sem eles valem os pesos manuais.
+    Com BPM alvo os pesos de `W_ALVO` continuam valendo: o rumo pedido pelo DJ manda."""
+    w_vibe, w_bpm, w_key, w_en = pesos if pesos else (W_VIBE, W_BPM, W_KEY, W_ENERGY)
     md = alvo is None      # com BPM alvo, meio tempo/dobro não aproxima o set do alvo
     d2 = existe_compativel(prev, candidatos, md)
     saida = []
@@ -142,7 +145,7 @@ def rank_next(prev: dict, candidatos: list, vibe_fn, bonus_fn=None, alvo=None) -
         t = technical(prev, c, md)
         if alvo is None:
             rumo = None
-            base = W_VIBE * v + W_BPM * t["bpm"] + W_KEY * t["tom"] + W_ENERGY * t["energia"]
+            base = w_vibe * v + w_bpm * t["bpm"] + w_key * t["tom"] + w_en * t["energia"]
         else:
             rumo = rumo_score(prev["bpm"], c["bpm"], alvo)
             base = (W_ALVO["vibe"] * v + W_ALVO["bpm"] * t["bpm"] + W_ALVO["tom"] * t["tom"]

@@ -1,9 +1,14 @@
 """Orquestra a sessão: estados do documento 4, eventos do documento 3 e decisões D1–D5."""
+import logging
 import secrets
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from .fontes import FonteErro
-from . import dj, feedback, musicfinder
+from . import dj, feedback, musicfinder, sugestor
+from .narrador import Narrador
+
+log = logging.getLogger("soulsbpm.engine")
 
 # estados (documento 4)
 INICIO, BUSCANDO, RESULTADOS, SEM_RESULTADOS = "inicio", "buscando", "resultados", "sem_resultados"
@@ -16,6 +21,7 @@ VIBE_MINIMA = 0.3
 SESSAO_TTL = 3 * 3600          # sessão parada por 3 h expira (o app guarda tudo em memória)
 MAX_SESSOES = 5000
 MAX_TEXTO_BUSCA = 200
+ESPERA_SUGESTAO_IA = 12.0      # tempo máximo esperando a IA sugerir artistas (a busca segue sem ela se passar)
 
 
 class Erro(Exception):
@@ -43,13 +49,21 @@ class Sessao:
 
 
 class Motor:
-    def __init__(self, catalogo, store, agora=None, provedor=None):
+    def __init__(self, catalogo, store, agora=None, provedor=None, ia=None, embeddings=None, aprendizado=None,
+                 max_artistas_ia=3):
         self.catalogo = list(catalogo)
         self.por_id = {f["id"]: f for f in self.catalogo}
         self.store = store
         self.agora = agora
         self.sessoes = {}
         self.provedor = provedor              # modo ao vivo: busca faixas reais a cada vibe (soulsbpm/aovivo.py)
+        # recursos de IA, todos opcionais e com reserva: sem eles o app funciona como antes
+        self.ia = ia                          # modelo de linguagem: sugere artistas e narra as transições
+        self.embeddings = embeddings          # similaridade semântica entre a frase e as faixas
+        self.aprendizado = aprendizado        # pesos da nota aprendidos com o feedback
+        self.max_artistas_ia = max_artistas_ia
+        self.narrador = Narrador(ia)
+        self._pool_ia = ThreadPoolExecutor(max_workers=2)
         if provedor:                          # reabre playlists e histórico de faixas já descobertas
             self.adicionar_faixas(store.load_tracks(), salvar=False)
 
@@ -116,8 +130,35 @@ class Motor:
             perto = (lambda f: 0.5 * dj.rumo_score(alvo, f["bpm"], alvo)) if alvo is not None else (lambda f: 0.0)
             nota = lambda f: vibe(f) + perto(f) + dj.ajuste_perfil(perfil.bonus(None, f, tags))
             return {"faixa": min(cands, key=lambda f: (-nota(f), f["id"]))}
-        ranking = dj.rank_next(prev, cands, self._vibe(s), lambda p, c: perfil.bonus(p, c, tags), s.bpm_alvo)
+        ranking = dj.rank_next(prev, cands, self._vibe(s), lambda p, c: perfil.bonus(p, c, tags), s.bpm_alvo,
+                               self._pesos())
         return ranking[0]
+
+    def _pesos(self):
+        """Pesos da nota aprendidos com o feedback (None enquanto não há dados: valem os pesos manuais)."""
+        return self.aprendizado.pesos() if self.aprendizado else None
+
+    def _x(self, s, prev, cand):
+        """Os 4 critérios (0 a 1) da transição prev → cand: o que o aprendizado enxerga."""
+        t = dj.technical(prev, cand)
+        return {"vibe": musicfinder.vibe_score(cand, s.interp), "bpm": t["bpm"], "tom": t["tom"], "energia": t["energia"]}
+
+    def _aprende(self, s, tipo, prev, cand, y):
+        """Guarda a transição como exemplo de treino. Com BPM alvo a fórmula é outra, então não conta."""
+        if not self.aprendizado or not s.user_id or prev is None or s.bpm_alvo is not None:
+            return
+        try:
+            self.aprendizado.registrar(s.user_id, tipo, prev["id"], cand["id"], self._x(s, prev, cand), y)
+        except Exception as e:                # o aprendizado nunca pode atrapalhar quem está ouvindo
+            log.warning("Aprendizado: não registrei a transição (%s)", type(e).__name__)
+
+    def _desaprende(self, s, tipo, prev, cand):
+        if not self.aprendizado or not s.user_id or prev is None:
+            return
+        try:
+            self.aprendizado.remover(s.user_id, tipo, prev["id"], cand["id"])
+        except Exception as e:
+            log.warning("Aprendizado: não desfiz a transição (%s)", type(e).__name__)
 
     def _publica(self, r):
         if r is None:
@@ -172,6 +213,39 @@ class Motor:
                       resumo=f"Entendi: artista {oficial} e artistas parecidos")
         return None
 
+    # IA na busca: artistas sugeridos e similaridade semântica (ambos opcionais) ---------
+    def _pedir_artistas_ia(self, texto):
+        """Começa em segundo plano a sugestão de artistas pela IA. None se o recurso não estiver disponível."""
+        if self.ia is None or self.max_artistas_ia <= 0 or not hasattr(self.provedor, "candidatas_sugeridas"):
+            return None
+        return self._pool_ia.submit(sugestor.sugerir, self.ia, texto)
+
+    def _faixas_dos_artistas_ia(self, sugestao, interp):
+        """Faixas dos artistas sugeridos, já confirmados no Last.fm e com BPM/tom. Vazio se algo falhar."""
+        if sugestao is None:
+            return []
+        try:
+            nomes = sugestao.result(timeout=ESPERA_SUGESTAO_IA)
+            if not nomes:
+                return []
+            return list(self.provedor.candidatas_sugeridas(nomes, interp, self.max_artistas_ia))
+        except Exception as e:                      # IA lenta, fonte fora do ar etc.: a busca segue sem as sugestões
+            log.warning("Artistas sugeridos pela IA ignorados (%s)", type(e).__name__)
+            return []
+
+    def _pontuar_semantica(self, texto, interp, faixas):
+        """Nota de similaridade semântica (embeddings) entre a frase e as faixas desta busca."""
+        if self.embeddings is None or not faixas:
+            return
+        unicas = list({f["id"]: f for f in faixas}.values())
+        try:
+            notas = self.embeddings.pontuar(texto, unicas)
+        except Exception as e:
+            log.warning("Embeddings ignorados nesta busca (%s)", type(e).__name__)
+            return
+        if notas:
+            interp["semantica"] = notas
+
     # busca (evento BuscaContextualEfetuada) --------------------------------
     def buscar(self, user_id, texto):
         if texto is not None and not isinstance(texto, str):
@@ -198,10 +272,16 @@ class Motor:
                     "exemplos": musicfinder.EXEMPLOS}
         perfil, tags = self.perfil(user_id), list(interp["tags"])
         if self.provedor and interp.get("artista") is None:            # modo ao vivo: traz faixas reais da vibe
+            sugestao = self._pedir_artistas_ia(texto)                  # a IA pensa enquanto o Last.fm responde
+            achadas = []
             try:
-                self.adicionar_faixas(self.provedor.candidatas(interp))
+                achadas = list(self.provedor.candidatas(interp))
+                self.adicionar_faixas(achadas)
             except FonteErro as e:
                 base["aviso"] = f"Não consegui consultar as fontes de música agora ({e}). Usando o que já conheço."
+            extras = self._faixas_dos_artistas_ia(sugestao, interp)
+            self.adicionar_faixas(extras)
+            self._pontuar_semantica(texto, interp, achadas + extras)
         achados = musicfinder.buscar(self.catalogo, interp)
         # perfil só reordena os resultados já alinhados à vibe
         achados.sort(key=lambda f: -(f["vibe"] + dj.ajuste_perfil(perfil.bonus(None, f, tags))))
@@ -237,6 +317,7 @@ class Motor:
         nova, prev = s.sugerida["faixa"], self._atual(s)
         feedback.registrar_positivo(self.perfil(s.user_id), "accept", nova, prev)
         self.store.add_history(s.user_id, "accept", nova["id"], s.consulta)
+        self._aprende(s, "accept", prev, nova, 1)
         s.aceites.append({"faixa_id": nova["id"], "sugerida": s.sugerida})   # para o "Desfazer aceite"
         s.sequencia.append(nova["id"])
         s.volta.append({"tipo": "aceite"})
@@ -261,6 +342,7 @@ class Motor:
             s.volta.pop()
         feedback.registrar_positivo(self.perfil(s.user_id), "accept", self.por_id[reg["faixa_id"]], self._atual(s), sinal=-1)
         self.store.add_history(s.user_id, "undo_accept", reg["faixa_id"], s.consulta)
+        self._desaprende(s, "accept", self._atual(s), self.por_id[reg["faixa_id"]])
         s.sugerida = reg["sugerida"]
         s.estado = SUGERINDO
         return self._estado_dj(s, [SUGERINDO], ["AceiteDesfeito"])
@@ -294,6 +376,7 @@ class Motor:
         s.estado = REAJUSTANDO
         info = feedback.registrar_pulo(perfil, pulada, prev, tags, fracao, pct)
         self.store.add_history(s.user_id, "skip", pulada["id"], s.consulta, fracao)
+        self._aprende(s, info["tipo"], prev, pulada, 0)
         s.puladas.add(pulada["id"])
         s.pulos_seguidos += 1
         if alvo == "sugestao":
@@ -327,11 +410,12 @@ class Motor:
             pulada = self.por_id[reg["faixa_id"]]
             prev = self.por_id[reg["prev_id"]] if reg["prev_id"] else None
             feedback.desfazer_pulo(perfil, pulada, prev, reg["tags"], reg["info"])
+            self._desaprende(s, reg["info"]["tipo"], prev, pulada)
             s.puladas.discard(pulada["id"])
             s.sequencia.append(pulada["id"])
         tags = list(s.interp["tags"])
         s.sugerida = dj.rank_next(self._atual(s), [saiu], self._vibe(s),
-                                  lambda p, c: perfil.bonus(p, c, tags), s.bpm_alvo)[0]
+                                  lambda p, c: perfil.bonus(p, c, tags), s.bpm_alvo, self._pesos())[0]
         s.pulos_seguidos = 0
         self.store.add_history(s.user_id, "back", saiu["id"], s.consulta)
         s.estado = SUGERINDO
@@ -348,10 +432,12 @@ class Motor:
             s.curtidas.discard(atual["id"])
             feedback.registrar_positivo(self.perfil(s.user_id), "like", atual, prev, sinal=-1)
             self.store.add_history(s.user_id, "unlike", atual["id"], s.consulta)
+            self._desaprende(s, "like", prev, atual)
             return {"ok": True, "faixa_id": atual["id"], "curtida": False}
         s.curtidas.add(atual["id"])
         feedback.registrar_positivo(self.perfil(s.user_id), "like", atual, prev)
         self.store.add_history(s.user_id, "like", atual["id"], s.consulta)
+        self._aprende(s, "like", prev, atual, 1)
         s.pulos_seguidos = 0
         return {"ok": True, "faixa_id": atual["id"], "curtida": True}
 
@@ -395,6 +481,15 @@ class Motor:
         s.estado = SUGERINDO
         return self._estado_dj(s, [REAJUSTANDO, SUGERINDO], ["BpmAlvoAlterado", "ProximaFaixaSolicitada"])
 
+    def explicar(self, sid):
+        """Explica em linguagem natural por que a faixa sugerida combina com a atual (IA, ou as regras sem IA)."""
+        s = self.sessao(sid)
+        if not s.sugerida or not s.sequencia:
+            raise Erro("Não há sugestão para explicar.")
+        r = s.sugerida
+        return self.narrador.explicar(self._atual(s), r["faixa"], r["tecnica"], r.get("motivos", []),
+                                      s.interp.get("resumo"), s.bpm_alvo)
+
     # salvar (evento SequenciaSalva) ------------------------------------------
     def salvar(self, sid, titulo=None, tags=None):
         s = self.sessao(sid)
@@ -406,6 +501,7 @@ class Motor:
         perfil = self.perfil(s.user_id)
         for a, b in zip(s.sequencia, s.sequencia[1:]):
             feedback.registrar_positivo(perfil, "save", self.por_id[b], self.por_id[a])
+            self._aprende(s, "save", self.por_id[a], self.por_id[b], 1)
         self.store.add_history(s.user_id, "save", query=s.consulta)
         pid = self.store.save_playlist(s.user_id, titulo, tags, list(s.sequencia))
         s.estado = SALVA
