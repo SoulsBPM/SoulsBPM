@@ -90,7 +90,7 @@ pip install -r requirements.txt
 #   LASTFM_API_KEY=sua_chave
 #   GETSONGBPM_API_KEY=sua_chave
 python app.py               # http://localhost:5000
-python -m unittest discover -s tests -t .   # 253 testes
+python -m unittest discover -s tests -t .   # 267 testes
 ```
 
 No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e `python3`.
@@ -157,3 +157,7 @@ tools/               diagnósticos das APIs e importador de catálogo
 - Não busca por nome de música, só por vibe ou artista.
 - Sem recuperação de senha, confirmação de e-mail ou exclusão de conta pela tela.
 - Sessões do Modo DJ em memória (expiram após 3 h paradas); reiniciar o servidor encerra as abertas.
+
+## Avaliar a qualidade das buscas
+
+`python tools/avaliar_buscas.py` roda 15 buscas por fonte (Last.fm por tag, artistas sugeridos pela IA e o combinado que o app mostra) e gera `avaliacao/avaliacao.csv`. Marque `s` ou `n` na coluna `boa` e rode `python tools/avaliar_buscas.py --resumo avaliacao/avaliacao.csv` para ver, por fonte, a porcentagem de músicas boas. Usa o cache da GetSongBPM, então repetir não gasta a cota.
