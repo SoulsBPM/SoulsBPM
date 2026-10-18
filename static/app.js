@@ -338,12 +338,12 @@ async function telaInicio(msg, exemplos) {
   pararReproducao(); abas("buscar"); S.sid = null; S.dj = null; S.res = null; S.salvo = false;
   let recentes = [];
   try { recentes = (await api("GET", "/api/recent")).buscas; } catch {}
-  const sugestoes = exemplos?.length ? exemplos : (recentes.length ? recentes : ["estudar à noite", "treino", "festa", "tipo Calvin Harris"]);
+  const sugestoes = exemplos?.length ? exemplos : (recentes.length ? recentes : ["estudar à noite", "treino", "festa", "churrasco com os amigos"]);
   app.innerHTML = `
     <div class="hero"><h1>Qual é a <span class="vibe">vibe</span> do seu momento?</h1>
-      <p>Descreva o clima ou diga um artista (ex.: “tipo Calvin Harris”). A IA escolhe por onde começar e conduz o BPM de uma faixa à outra.</p></div>
+      <p>Descreva o clima ou o momento (ex.: “música calma para estudar à noite”). A IA escolhe por onde começar e conduz o BPM de uma faixa à outra.</p></div>
     <form id="f-busca">
-      <textarea id="vibe" placeholder="Ex.: música calma para estudar à noite, ou tipo Calvin Harris" aria-label="Descreva a vibe">${esc(S.busca)}</textarea>
+      <textarea id="vibe" placeholder="Ex.: música calma para estudar à noite" aria-label="Descreva a vibe">${esc(S.busca)}</textarea>
       <button class="btn btn-pri">${ic("search")} Buscar faixas</button>
     </form>
     ${msg ? `<div class="aviso">${esc(msg)}</div>` : ""}

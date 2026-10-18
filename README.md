@@ -3,7 +3,7 @@
 **Use agora: https://soulsbpm.onrender.com**
 
 Curadoria musical por **vibe**, com **transições harmoniosas**. Você descreve o clima da música em linguagem natural
-(“música calma para estudar à noite”) ou digita um artista (“tipo Calvin Harris”), e o SoulsBPM monta uma sequência em que
+(“música calma para estudar à noite”), e o SoulsBPM monta uma sequência em que
 uma faixa leva à outra de forma natural, como um DJ faria, e aprende com o que você pula e curte.
 
 > O app não toca áudio. Ele monta a ordem das faixas e o botão **Ouvir** abre a música no Spotify ou no YouTube.
