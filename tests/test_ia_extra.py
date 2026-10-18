@@ -92,6 +92,61 @@ class TestCompletar(unittest.TestCase):
         self.assertIsNone(llm.InterpretadorIA("k", http=HttpFalso([texto_da_ia("x")])).completar("s", "  "))
 
 
+class TestRetentativas(unittest.TestCase):
+    def http_erro(self, codigo):
+        return urllib.error.HTTPError("u", codigo, "x", {}, None)
+
+    def ia(self, respostas, esperas=(1.0, 3.0)):
+        http = HttpFalso(respostas)
+        pausas = []
+        return llm.InterpretadorIA("k", http=http, esperas=esperas, dormir=pausas.append), http, pausas
+
+    def test_503_passageiro_e_recuperado_na_segunda_tentativa(self):
+        ia, http, pausas = self.ia([self.http_erro(503), texto_da_ia("Deu certo")])
+        self.assertEqual(ia.completar("s", "u"), "Deu certo")
+        self.assertEqual(len(http.chamadas), 2)
+        self.assertEqual(pausas, [1.0])
+
+    def test_interpretador_tambem_tenta_de_novo(self):
+        ia, http, pausas = self.ia([self.http_erro(503), self.http_erro(429),
+                                    texto_da_ia('{"clara": true, "tags": {"calma": 2}, "energia": 0.3, "generos": []}')])
+        self.assertTrue(ia("música calma")["clara"])
+        self.assertEqual((len(http.chamadas), pausas), (3, [1.0, 3.0]))
+
+    def test_esgotadas_as_tentativas_conta_uma_falha_so_e_devolve_none(self):
+        ia, http, pausas = self.ia([self.http_erro(503)])
+        self.assertIsNone(ia.completar("s", "u"))
+        self.assertEqual(len(http.chamadas), 3)                      # 1 + 2 esperas
+        self.assertEqual(ia._falhas, 1)                              # para a pausa, são 3 pedidos = 1 falha
+
+    def test_erro_que_repetir_nao_resolve_sai_na_primeira(self):
+        for codigo in (400, 401, 403, 404):
+            ia, http, pausas = self.ia([self.http_erro(codigo)])
+            self.assertIsNone(ia.completar("s", "u"))
+            self.assertEqual((len(http.chamadas), pausas), (1, []), codigo)
+
+    def test_falha_de_rede_tambem_tenta_de_novo(self):
+        ia, http, _ = self.ia([urllib.error.URLError("sem rede"), texto_da_ia("voltou")])
+        self.assertEqual(ia.completar("s", "u"), "voltou")
+
+    def test_com_http_injetado_nao_espera_por_padrao(self):
+        self.assertEqual(llm.InterpretadorIA("k", http=HttpFalso([texto_da_ia("x")]))._esperas, ())
+        self.assertEqual(llm.InterpretadorIA("k")._esperas, llm.ESPERAS_PADRAO)       # com a rede de verdade, espera
+
+
+class TestAvaliarIASemNomes(unittest.TestCase):
+    def test_ia_que_nao_devolve_artistas_aparece_como_erro_e_nao_como_fonte_ruim(self):
+        from tools import avaliar_buscas as av
+        from tests.test_avaliar_buscas import IA, provedor as prov
+        musicfinder.configurar_ia(None)
+        with __import__("tempfile").TemporaryDirectory() as d:
+            _, resumo = av.gerar(["música calma para estudar à noite"], prov(), IA('{"artistas": []}'), d, limite=5,
+                                 imprimir=lambda *_: None)
+        self.assertEqual(resumo["ia_artistas"]["erros"], 1)
+        self.assertEqual(resumo["ia_artistas"]["retornou"], 0)
+        self.assertGreater(resumo["lastfm_tags"]["retornou"], 0)
+
+
 class TestSugestor(unittest.TestCase):
     def test_validar_limpa_e_deduplica(self):
         r = sugestor.validar({"artistas": ["  Tame   Impala ", "tame impala", "Tâme Impala", "Jorge Ben", 7, None, "",

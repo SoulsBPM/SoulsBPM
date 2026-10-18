@@ -40,6 +40,9 @@ PROVEDORES = {
     "anthropic": ("ANTHROPIC_API_KEY", "anthropic", URL, MODELO_PADRAO),
 }
 
+RETENTAR = (429, 500, 502, 503, 504)       # erros do provedor que costumam passar sozinhos
+ESPERAS_PADRAO = (1.0, 3.0)                # segundos entre as tentativas (até 3 no total)
+
 TAGS_VALIDAS = tuple(TAG_LASTFM)
 GENEROS_VALIDOS = tuple(GENERO_LASTFM)
 
@@ -121,7 +124,7 @@ class InterpretadorIA:
     """Chamável: interpretador(texto) -> {clara, tags, energia, generos, tecnico} ou None (use o léxico)."""
 
     def __init__(self, chave, modelo=None, http=None, timeout=10.0, cache_max=500, falhas_max=3, pausa=60.0,
-                 agora=time.time, provedor="anthropic"):
+                 agora=time.time, provedor="anthropic", esperas=None, dormir=time.sleep):
         if not chave:
             raise ValueError("Defina a chave do provedor de IA.")
         if provedor not in PROVEDORES:
@@ -129,6 +132,10 @@ class InterpretadorIA:
         _, self.formato, self.url, padrao = PROVEDORES[provedor]
         self.provedor, self._chave, self.modelo = provedor, chave, modelo or padrao
         self._http, self.timeout = http or self._http_real, timeout
+        # esperas entre as tentativas quando o provedor está sobrecarregado (503, 429…). Com `http` injetado
+        # (testes) não espera, a menos que `esperas` seja informado.
+        self._esperas = tuple(esperas) if esperas is not None else (ESPERAS_PADRAO if http is None else ())
+        self._dormir = dormir
         self._cache, self._cache_max = OrderedDict(), cache_max
         self._cache_livre = OrderedDict()                # respostas de `completar` (texto livre)
         self._lock = threading.Lock()
@@ -142,6 +149,23 @@ class InterpretadorIA:
                     "messages": [{"role": "user", "content": msg}]}
         return {"model": self.modelo, "max_tokens": 1500, "temperature": 0,
                 "messages": [{"role": "system", "content": SISTEMA}, {"role": "user", "content": msg}]}
+
+    def _enviar(self, corpo):
+        """Envia o pedido e tenta de novo, com espera curta, se o provedor estiver sobrecarregado ou a rede falhar
+        por um instante. Erros que repetir não resolve (chave inválida, pedido ruim) saem na primeira."""
+        for i in range(len(self._esperas) + 1):
+            try:
+                return self._http(corpo, self._chave, self.timeout)
+            except urllib.error.HTTPError as e:
+                if e.code not in RETENTAR or i == len(self._esperas):
+                    raise
+                motivo = f"HTTP {e.code}"
+            except (urllib.error.URLError, TimeoutError) as e:
+                if i == len(self._esperas):
+                    raise
+                motivo = type(e).__name__
+            log.info("IA: %s; tentando de novo em %.0fs", motivo, self._esperas[i])
+            self._dormir(self._esperas[i])
 
     def _http_real(self, corpo, chave, timeout):
         if self.formato == "anthropic":
@@ -161,7 +185,7 @@ class InterpretadorIA:
             if self._agora() < self._pausado_ate:        # IA fora do ar: nem tenta, o léxico responde
                 return None
         try:
-            resp = self._http(self._corpo(texto), self._chave, self.timeout)
+            resp = self._enviar(self._corpo(texto))
             r = validar(_json_da_resposta(_texto_da_resposta(resp)))
             if r is None:
                 raise ValueError("resposta fora do formato")
@@ -204,7 +228,7 @@ class InterpretadorIA:
             if self._agora() < self._pausado_ate:
                 return None
         try:
-            resp = self._http(self._corpo_livre(sistema, usuario, max_tokens, temperatura), self._chave, self.timeout)
+            resp = self._enviar(self._corpo_livre(sistema, usuario, max_tokens, temperatura))
             texto = _texto_da_resposta(resp).strip()
             if not texto:
                 raise ValueError("resposta vazia")

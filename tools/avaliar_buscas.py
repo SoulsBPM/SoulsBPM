@@ -107,7 +107,9 @@ def avaliar_busca(texto, provedor, ia, espiao, limite=10, embeddings=None):
         if ia is not None and hasattr(provedor, "candidatas_sugeridas"):
             def via_ia():
                 nomes = sugestor.sugerir(ia, texto)
-                return _top(list(provedor.candidatas_sugeridas(nomes, interp)), interp, limite) if nomes else []
+                if not nomes:                                 # sem isto a fonte pareceria "ruim" quando na verdade nem rodou
+                    raise RuntimeError("a IA não devolveu artistas (indisponível, sobrecarregada ou sem resposta)")
+                return _top(list(provedor.candidatas_sugeridas(nomes, interp)), interp, limite)
             medir("ia_artistas", via_ia)
 
     def combinado():
