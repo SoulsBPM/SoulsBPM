@@ -214,3 +214,17 @@ def buscar(catalogo: list, interp: dict, limite: int = 10, minimo: float = 0.4) 
     pontuadas = [(s, f) for s, f in pontuadas if s >= minimo]
     pontuadas.sort(key=lambda x: (-x[0], x[1]["id"]))
     return [dict(f, vibe=round(s, 3)) for s, f in pontuadas[:limite]]
+
+
+def diversificar(faixas: list, limite: int = 10, max_por_artista: int = 3) -> list:
+    """Mantém a ordem, mas deixa no máximo `max_por_artista` músicas de cada artista entre as primeiras.
+    Se não houver artistas suficientes, completa com as que sobraram (a lista nunca encolhe por causa disso)."""
+    contagem, escolhidas, sobras = {}, [], []
+    for f in faixas:
+        a = f["artista"].strip().lower()
+        if contagem.get(a, 0) < max_por_artista:
+            contagem[a] = contagem.get(a, 0) + 1
+            escolhidas.append(f)
+        else:
+            sobras.append(f)
+    return (escolhidas + sobras)[:limite]

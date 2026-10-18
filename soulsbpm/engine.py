@@ -21,6 +21,8 @@ VIBE_MINIMA = 0.3
 SESSAO_TTL = 3 * 3600          # sessão parada por 3 h expira (o app guarda tudo em memória)
 MAX_SESSOES = 5000
 MAX_TEXTO_BUSCA = 200
+LIMITE_RESULTADOS = 10         # faixas mostradas por busca
+MAX_POR_ARTISTA = 3            # no máximo 3 músicas do mesmo artista no topo (variedade)
 ESPERA_SUGESTAO_IA = 20.0      # tempo máximo esperando a IA sugerir artistas (a busca segue sem ela se passar)
 
 
@@ -282,9 +284,13 @@ class Motor:
             extras = self._faixas_dos_artistas_ia(sugestao, interp)
             self.adicionar_faixas(extras)
             self._pontuar_semantica(texto, interp, achadas + extras)
-        achados = musicfinder.buscar(self.catalogo, interp)
+        achados = musicfinder.buscar(self.catalogo, interp, limite=LIMITE_RESULTADOS * 4)
         # perfil só reordena os resultados já alinhados à vibe
         achados.sort(key=lambda f: -(f["vibe"] + dj.ajuste_perfil(perfil.bonus(None, f, tags))))
+        if interp.get("artista") is None:                              # busca por artista pode repetir o artista
+            achados = musicfinder.diversificar(achados, LIMITE_RESULTADOS, MAX_POR_ARTISTA)
+        else:
+            achados = achados[:LIMITE_RESULTADOS]
         if not achados:                                                # D4: nada encontrado
             s.estado = SEM_RESULTADOS
             self.sessoes[s.id] = s
