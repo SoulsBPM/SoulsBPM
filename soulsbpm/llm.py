@@ -123,7 +123,7 @@ def _texto_da_resposta(resp):
 class InterpretadorIA:
     """Chamável: interpretador(texto) -> {clara, tags, energia, generos, tecnico} ou None (use o léxico)."""
 
-    def __init__(self, chave, modelo=None, http=None, timeout=10.0, cache_max=500, falhas_max=3, pausa=60.0,
+    def __init__(self, chave, modelo=None, http=None, timeout=15.0, cache_max=500, falhas_max=3, pausa=60.0,
                  agora=time.time, provedor="anthropic", esperas=None, dormir=time.sleep):
         if not chave:
             raise ValueError("Defina a chave do provedor de IA.")
@@ -160,8 +160,10 @@ class InterpretadorIA:
                 if e.code not in RETENTAR or i == len(self._esperas):
                     raise
                 motivo = f"HTTP {e.code}"
-            except (urllib.error.URLError, TimeoutError) as e:
-                if i == len(self._esperas):
+            except TimeoutError:
+                raise                        # já esperou o tempo todo: repetir só atrasaria mais a resposta
+            except urllib.error.URLError as e:
+                if isinstance(e.reason, TimeoutError) or i == len(self._esperas):
                     raise
                 motivo = type(e).__name__
             log.info("IA: %s; tentando de novo em %.0fs", motivo, self._esperas[i])
@@ -244,6 +246,11 @@ class InterpretadorIA:
             while len(self._cache_livre) > self._cache_max:
                 self._cache_livre.popitem(last=False)
         return texto
+
+    def em_pausa(self):
+        """True enquanto a IA está em pausa depois de várias falhas seguidas (as chamadas voltam vazias na hora)."""
+        with self._lock:
+            return self._agora() < self._pausado_ate
 
     def _falhou(self, motivo):
         with self._lock:

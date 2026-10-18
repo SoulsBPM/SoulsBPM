@@ -81,8 +81,10 @@ def _top(faixas, interp, limite):
     return musicfinder.buscar(faixas, interp, limite=limite, minimo=0.0)
 
 
-def avaliar_busca(texto, provedor, ia, espiao, limite=10, embeddings=None):
-    """Roda as três fontes para uma frase. Devolve (linhas, métricas por fonte)."""
+def avaliar_busca(texto, provedor, ia, espiao, limite=10, embeddings=None, dormir=time.sleep, espera_ia=0.0):
+    """Roda as três fontes para uma frase. Devolve (linhas, métricas por fonte).
+    Se a IA não devolver artistas (limite por minuto do plano gratuito, por exemplo), espera `espera_ia`
+    segundos e tenta mais uma vez."""
     from soulsbpm.engine import Motor
     from soulsbpm.store import Store
     linhas, metricas = [], {}
@@ -106,9 +108,12 @@ def avaliar_busca(texto, provedor, ia, espiao, limite=10, embeddings=None):
         medir("lastfm_tags", lambda: _top(list(provedor.candidatas(interp)), interp, limite))
         if ia is not None and hasattr(provedor, "candidatas_sugeridas"):
             def via_ia():
-                nomes = sugestor.sugerir(ia, texto)
+                nomes, motivo = sugestor.sugerir_detalhado(ia, texto)
+                if not nomes and espera_ia > 0:               # limite por minuto do plano gratuito: espera e tenta 1 vez mais
+                    dormir(espera_ia)
+                    nomes, motivo = sugestor.sugerir_detalhado(ia, texto)
                 if not nomes:                                 # sem isto a fonte pareceria "ruim" quando na verdade nem rodou
-                    raise RuntimeError("a IA não devolveu artistas (indisponível, sobrecarregada ou sem resposta)")
+                    raise RuntimeError(motivo)
                 return _top(list(provedor.candidatas_sugeridas(nomes, interp)), interp, limite)
             medir("ia_artistas", via_ia)
 
@@ -119,7 +124,8 @@ def avaliar_busca(texto, provedor, ia, espiao, limite=10, embeddings=None):
     return linhas, metricas
 
 
-def gerar(buscas, provedor, ia, saida, limite=10, embeddings=None, imprimir=print):
+def gerar(buscas, provedor, ia, saida, limite=10, embeddings=None, imprimir=print, pausa=0.0, espera_ia=0.0,
+          dormir=time.sleep):
     saida = pathlib.Path(saida)
     saida.mkdir(parents=True, exist_ok=True)
     espiao = Espiao(provedor)
@@ -127,7 +133,7 @@ def gerar(buscas, provedor, ia, saida, limite=10, embeddings=None, imprimir=prin
     try:
         for i, texto in enumerate(buscas, 1):
             imprimir(f"[{i}/{len(buscas)}] {texto}")
-            linhas, metricas = avaliar_busca(texto, provedor, ia, espiao, limite, embeddings)
+            linhas, metricas = avaliar_busca(texto, provedor, ia, espiao, limite, embeddings, dormir, espera_ia)
             todas += linhas
             for fonte, m in metricas.items():
                 r = resumo[fonte]
@@ -135,6 +141,9 @@ def gerar(buscas, provedor, ia, saida, limite=10, embeddings=None, imprimir=prin
                 r["sem_bpm"] += m["sem_bpm"]; r["retornou"] += m["retornou"]; r["erros"] += 1 if m["erro"] else 0
                 if m["erro"]:
                     imprimir(f"    {fonte}: ERRO {m['erro']}")
+            if pausa and i < len(buscas):                       # o plano gratuito da IA limita chamadas por minuto
+                imprimir(f"    (aguardando {pausa:.0f}s para respeitar o limite de uso da IA)")
+                dormir(pausa)
     finally:
         espiao.restaurar()
     arquivo = saida / "avaliacao.csv"
@@ -209,6 +218,11 @@ def main(argv=None):
     p.add_argument("--buscas", help="arquivo de texto com uma frase por linha (padrão: 15 frases prontas)")
     p.add_argument("--saida", default="avaliacao", help="pasta de saída (padrão: avaliacao)")
     p.add_argument("--por-busca", type=int, default=10, help="músicas por fonte em cada busca (padrão 10)")
+    p.add_argument("--pausa", type=float, default=None, metavar="SEGUNDOS",
+                   help="espera entre as buscas, para não estourar o limite do plano gratuito da IA "
+                        "(padrão: 15 com IA ligada, 0 sem IA)")
+    p.add_argument("--espera-ia", type=float, default=65.0,
+                   help="segundos de espera antes de tentar a IA de novo se ela falhar (padrão 65; 0 não espera)")
     p.add_argument("--resumo", metavar="CSV", help="só calcula o resumo de um CSV já marcado")
     a = p.parse_args(argv)
     if a.resumo:
@@ -228,11 +242,17 @@ def main(argv=None):
         print("Faltam as chaves LASTFM_API_KEY e GETSONGBPM_API_KEY (coloque no arquivo .env).")
         return 1
     ia = llm_do_ambiente()
+    if ia:
+        ia.timeout = max(ia.timeout, 30.0)                   # o modelo gratuito pode demorar mais de 10 s
     musicfinder.configurar_ia(ia)
     embeddings = emb.do_ambiente() if ia else None
     print("IA de linguagem:", "ligada" if ia else "desligada (a fonte ia_artistas será pulada)")
     print("Embeddings:", "ligados" if embeddings else "desligados")
-    arquivo, resumo = gerar(_buscas(a.buscas), provedor, ia, a.saida, a.por_busca, embeddings)
+    pausa = a.pausa if a.pausa is not None else (15.0 if (ia or embeddings) else 0.0)
+    if pausa:
+        print(f"Pausa entre as buscas: {pausa:.0f}s (muda com --pausa; 0 desliga)")
+    arquivo, resumo = gerar(_buscas(a.buscas), provedor, ia, a.saida, a.por_busca, embeddings, pausa=pausa,
+                            espera_ia=a.espera_ia if ia else 0.0)
     print(f"\nPlanilha salva em: {arquivo}")
     imprimir_geracao(resumo)
     return 0

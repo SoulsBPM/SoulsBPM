@@ -109,6 +109,30 @@ class TestGerar(unittest.TestCase):
         self.assertFalse(any("api_key" in s for s in saidas))
 
 
+class TestPausaEMotivo(unittest.TestCase):
+    def test_pausa_entre_buscas_e_nao_depois_da_ultima(self):
+        esperas = []
+        with tempfile.TemporaryDirectory() as d:
+            av.gerar(["rock pesado", "jazz suave", "pagode alegre"], provedor(), None, d, limite=3,
+                     imprimir=lambda *_: None, pausa=7, dormir=esperas.append)
+        self.assertEqual(esperas, [7, 7])
+
+    def test_sem_pausa_nao_dorme(self):
+        esperas = []
+        with tempfile.TemporaryDirectory() as d:
+            av.gerar(["rock pesado", "jazz suave"], provedor(), None, d, limite=3, imprimir=lambda *_: None,
+                     dormir=esperas.append)
+        self.assertEqual(esperas, [])
+
+    def test_o_motivo_da_ia_aparece_na_tela(self):
+        saidas = []
+        musicfinder.configurar_ia(None)
+        with tempfile.TemporaryDirectory() as d:
+            av.gerar(["música calma para estudar à noite"], provedor(), IA("Não sei."), d, limite=3,
+                     imprimir=saidas.append)
+        self.assertTrue(any("ia_artistas: ERRO" in s and "sem artistas válidos" in s for s in saidas), saidas)
+
+
 class TestResumo(unittest.TestCase):
     def csv(self, linhas):
         d = tempfile.TemporaryDirectory()
@@ -163,6 +187,49 @@ class TestResumo(unittest.TestCase):
         f = pathlib.Path(d.name) / "b.txt"
         f.write_text("# comentário\n\nrock pesado\n  jazz suave  \n", "utf-8")
         self.assertEqual(av._buscas(f), ["rock pesado", "jazz suave"])
+
+
+class IASequencia:
+    """IA que responde na ordem dada (a primeira vazia, como no limite por minuto do plano gratuito)."""
+
+    def __init__(self, respostas):
+        self.respostas = list(respostas)
+        self.chamadas = 0
+
+    def completar(self, sistema, usuario, max_tokens=400, temperatura=0.0):
+        self.chamadas += 1
+        return self.respostas.pop(0) if len(self.respostas) > 1 else self.respostas[0]
+
+
+class TestEsperaDaIA(unittest.TestCase):
+    def rodar(self, ia, espera_ia):
+        musicfinder.configurar_ia(None)
+        pausas = []
+        with tempfile.TemporaryDirectory() as d:
+            arq, resumo = av.gerar(["música calma para estudar à noite"], provedor(), ia, d, limite=5,
+                                   imprimir=lambda *_: None, espera_ia=espera_ia, dormir=pausas.append)
+            with open(arq, newline="", encoding="utf-8-sig") as f:
+                fontes = {l["fonte"] for l in csv.DictReader(f)}
+        return resumo, fontes, pausas
+
+    def test_espera_e_tenta_de_novo_quando_a_ia_falha_na_primeira(self):
+        ia = IASequencia([None, '{"artistas": ["Maré Alta"]}'])
+        resumo, fontes, pausas = self.rodar(ia, espera_ia=65.0)
+        self.assertIn("ia_artistas", fontes)
+        self.assertEqual(resumo["ia_artistas"]["erros"], 0)
+        self.assertGreater(resumo["ia_artistas"]["retornou"], 0)
+        self.assertIn(65.0, pausas)
+
+    def test_sem_espera_configurada_nao_tenta_de_novo(self):
+        ia = IASequencia([None, '{"artistas": ["Maré Alta"]}'])
+        resumo, _, pausas = self.rodar(ia, espera_ia=0.0)
+        self.assertEqual(resumo["ia_artistas"]["erros"], 1)
+        self.assertEqual(pausas, [])
+
+    def test_se_a_segunda_tentativa_tambem_falha_vira_erro_com_motivo(self):
+        resumo, _, pausas = self.rodar(IASequencia([None]), espera_ia=65.0)
+        self.assertEqual(resumo["ia_artistas"]["erros"], 1)
+        self.assertEqual(pausas.count(65.0), 1)                  # espera uma vez só, sem ficar em laço
 
 
 if __name__ == "__main__":

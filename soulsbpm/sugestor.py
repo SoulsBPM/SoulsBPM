@@ -58,18 +58,32 @@ def validar(obj, maximo=MAX_ARTISTAS):
     return saida
 
 
-def sugerir(ia, texto, maximo=MAX_ARTISTAS):
-    """Lista de nomes sugeridos pela IA para a vibe (vazia se a IA não existir, falhar ou não souber)."""
+def sugerir_detalhado(ia, texto, maximo=MAX_ARTISTAS):
+    """(nomes, motivo): os artistas sugeridos e, se vier vazio, por quê. Nunca levanta erro."""
     completar = getattr(ia, "completar", None)
-    if completar is None or not (texto or "").strip():
-        return []
+    if completar is None:
+        return [], "a IA está desligada (sem chave)"
+    if not (texto or "").strip():
+        return [], "frase vazia"
     try:
         resposta = completar(SISTEMA, f"<vibe>{texto.strip()}</vibe>", max_tokens=300)
     except Exception as e:                       # a busca nunca pode quebrar por causa da IA
         log.warning("Sugestão de artistas falhou (%s)", type(e).__name__)
-        return []
+        return [], f"erro inesperado ({type(e).__name__})"
     if not resposta:
-        return []
+        em_pausa = getattr(ia, "em_pausa", None)
+        if callable(em_pausa) and em_pausa():
+            return [], "a IA está em pausa depois de falhas seguidas (limite de uso ou instabilidade do provedor)"
+        return [], "a IA não respondeu (erro, limite de uso ou tempo esgotado)"
     nomes = validar(_json_da_resposta(resposta), maximo)
+    if not nomes:
+        trecho = re.sub(r"\s+", " ", resposta).strip()[:120]
+        log.warning("IA respondeu, mas sem artistas válidos: %r", trecho)
+        return [], f"a IA respondeu sem artistas válidos: {trecho!r}"
     log.info("IA sugeriu %d artista(s) para a vibe", len(nomes))
-    return nomes
+    return nomes, ""
+
+
+def sugerir(ia, texto, maximo=MAX_ARTISTAS):
+    """Lista de nomes sugeridos pela IA para a vibe (vazia se a IA não existir, falhar ou não souber)."""
+    return sugerir_detalhado(ia, texto, maximo)[0]

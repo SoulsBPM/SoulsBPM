@@ -147,6 +147,45 @@ class TestAvaliarIASemNomes(unittest.TestCase):
         self.assertGreater(resumo["lastfm_tags"]["retornou"], 0)
 
 
+class TestMotivoDaIA(unittest.TestCase):
+    def test_timeout_nao_e_repetido(self):
+        http = HttpFalso([TimeoutError("lento")])
+        ia = llm.InterpretadorIA("k", http=http, esperas=(1.0, 3.0), dormir=lambda s: None)
+        self.assertIsNone(ia.completar("s", "u"))
+        self.assertEqual(len(http.chamadas), 1)                       # repetir só dobraria a espera
+
+    def test_urlerror_de_timeout_tambem_nao_e_repetido(self):
+        http = HttpFalso([urllib.error.URLError(TimeoutError("lento"))])
+        ia = llm.InterpretadorIA("k", http=http, esperas=(1.0, 3.0), dormir=lambda s: None)
+        self.assertIsNone(ia.completar("s", "u"))
+        self.assertEqual(len(http.chamadas), 1)
+
+    def test_em_pausa_e_o_motivo_explicam_a_falta_de_resposta(self):
+        err = urllib.error.HTTPError("u", 429, "x", {}, None)
+        ia = llm.InterpretadorIA("k", http=HttpFalso([err]), falhas_max=1, pausa=60, agora=lambda: 0.0)
+        nomes, motivo = sugestor.sugerir_detalhado(ia, "música calma")
+        self.assertEqual(nomes, [])
+        self.assertIn("pausa", motivo)
+        self.assertTrue(ia.em_pausa())
+
+    def test_falha_sem_pausa_diz_que_nao_respondeu(self):
+        err = urllib.error.HTTPError("u", 429, "x", {}, None)
+        ia = llm.InterpretadorIA("k", http=HttpFalso([err]), falhas_max=5)
+        self.assertIn("não respondeu", sugestor.sugerir_detalhado(ia, "música calma")[1])
+        self.assertFalse(ia.em_pausa())
+
+    def test_resposta_sem_artistas_mostra_o_que_a_ia_disse(self):
+        nomes, motivo = sugestor.sugerir_detalhado(IAFalsa("Desculpe, não posso ajudar."), "música calma")
+        self.assertEqual(nomes, [])
+        self.assertIn("sem artistas válidos", motivo)
+        self.assertIn("Desculpe", motivo)
+
+    def test_sem_ia_vazio_e_sucesso(self):
+        self.assertIn("desligada", sugestor.sugerir_detalhado(None, "x")[1])
+        self.assertIn("vazia", sugestor.sugerir_detalhado(IAFalsa("x"), "  ")[1])
+        self.assertEqual(sugestor.sugerir_detalhado(IAFalsa('{"artistas": ["Bonobo"]}'), "lofi"), (["Bonobo"], ""))
+
+
 class TestSugestor(unittest.TestCase):
     def test_validar_limpa_e_deduplica(self):
         r = sugestor.validar({"artistas": ["  Tame   Impala ", "tame impala", "Tâme Impala", "Jorge Ben", 7, None, "",

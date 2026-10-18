@@ -21,7 +21,7 @@ VIBE_MINIMA = 0.3
 SESSAO_TTL = 3 * 3600          # sessão parada por 3 h expira (o app guarda tudo em memória)
 MAX_SESSOES = 5000
 MAX_TEXTO_BUSCA = 200
-ESPERA_SUGESTAO_IA = 12.0      # tempo máximo esperando a IA sugerir artistas (a busca segue sem ela se passar)
+ESPERA_SUGESTAO_IA = 20.0      # tempo máximo esperando a IA sugerir artistas (a busca segue sem ela se passar)
 
 
 class Erro(Exception):
