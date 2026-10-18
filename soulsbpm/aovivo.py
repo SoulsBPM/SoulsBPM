@@ -137,8 +137,14 @@ class AoVivo:
         self.espera, self.pool = espera, ThreadPoolExecutor(max_workers=trabalhadores)
 
     def tags_da_busca(self, interp):
-        """[(tag_lastfm, tags_app, generos)] — primeiro as tags mais fortes, depois os gêneros."""
+        """[(tag_lastfm, tags_app, generos)] — primeiro os gêneros (se o usuário pediu "jazz", jazz tem que vir),
+        depois as tags de clima mais fortes, até o limite de max_tags."""
         achados, vistos = [], set()
+        for g in interp["generos"]:
+            lf = GENERO_LASTFM.get(g)
+            if lf and lf not in vistos:
+                vistos.add(lf)
+                achados.append((lf, [], [g]))
         for tg, _ in sorted(interp["tags"].items(), key=lambda kv: -kv[1]):
             lf = TAG_LASTFM.get(tg)
             if lf:
@@ -149,11 +155,6 @@ class AoVivo:
                 else:
                     vistos.add(lf)
                     achados.append((lf, [tg], []))
-        for g in interp["generos"]:
-            lf = GENERO_LASTFM.get(g)
-            if lf and lf not in vistos:
-                vistos.add(lf)
-                achados.append((lf, [], [g]))
         return achados[: self.max_tags]
 
     def candidatas(self, interp):

@@ -232,5 +232,15 @@ class TestEsperaDaIA(unittest.TestCase):
         self.assertEqual(pausas.count(65.0), 1)                  # espera uma vez só, sem ficar em laço
 
 
+class TestGeneroPedidoNaoEhCortado(unittest.TestCase):
+    def test_genero_vem_antes_das_tags_mesmo_com_muitas_tags(self):
+        from soulsbpm.aovivo import TAG_LASTFM, GENERO_LASTFM
+        tags = {t: 5 - i for i, t in enumerate(list(TAG_LASTFM)[:6])}           # mais tags que o limite (4)
+        genero = next(iter(GENERO_LASTFM))
+        achadas = provedor().tags_da_busca({"tags": tags, "generos": [genero], "energia": None})
+        self.assertEqual(achadas[0][2], [genero])
+        self.assertLessEqual(len(achadas), 4)
+
+
 if __name__ == "__main__":
     unittest.main()
