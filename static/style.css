@@ -45,7 +45,7 @@ h1,h2,h3,p{margin:0}
 .app{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column}
 .tela{order:1;flex:1;width:100%;max-width:1200px;margin:0 auto;padding:18px 18px 20px;display:flex;flex-direction:column;gap:16px;min-width:0}
 body:not(.tecnico) .so-tec{display:none!important}
-body:not(.tecnico) .th,body:not(.tecnico) .tr{grid-template-columns:48px minmax(0,1fr) 170px}
+body:not(.tecnico) .th,body:not(.tecnico) .tr{grid-template-columns:48px minmax(0,1fr) 210px}
 
 /* menu lateral: sempre à esquerda. No PC, largo com ícone + texto; no celular, uma faixa estreita só com ícones */
 .app{flex-direction:row}
@@ -164,7 +164,7 @@ input.tag-in{width:140px;padding:7px 12px;font-size:15px;border-radius:var(--r-c
 
 /* ---------- biblioteca (resultados e playlists) ---------- */
 .tabela{display:flex;flex-direction:column}
-.th,.tr{display:grid;grid-template-columns:48px minmax(0,1fr) 70px 64px 76px 170px;align-items:center;column-gap:14px;padding:0 16px}
+.th,.tr{display:grid;grid-template-columns:48px minmax(0,1fr) 70px 64px 76px 210px;align-items:center;column-gap:14px;padding:0 16px}
 .th{min-height:38px;border-bottom:1px solid var(--linha);color:var(--apagado);font-size:14px;font-weight:600}
 .tr{min-height:72px;border-bottom:1px solid var(--linha)}
 .tr:last-child{border-bottom:0}
@@ -597,3 +597,12 @@ html[data-aovivo] .cred-bpm{display:inline}
 .exportar { padding: 14px 16px; margin-top: 14px; }
 .exportar h3 { margin: 0 0 6px; font-size: 1rem; }
 .exportar .fim { margin-top: 10px; }
+
+/* gerenciar playlists */
+.acao{display:flex;gap:8px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
+.btn.icone{padding:0;width:38px;min-width:38px;flex:none}
+.tr .acao .icone .ic{display:inline-block}
+.cab-pl{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.btn.perigo{color:var(--erro-txt);border-color:currentColor}
+#dlg-pl .linha.col .btn{justify-content:center}
+#nome-in{margin:6px 0 4px}

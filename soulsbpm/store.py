@@ -200,14 +200,34 @@ class Store:
         self._run("DELETE FROM transicoes WHERE user_id=?", (uid,))
 
     # playlists e grafo ---------------------------------------------------
-    def save_playlist(self, uid, title, tags, track_ids):
+    def save_playlist(self, uid, title, tags, track_ids, grafo=True):
+        """grafo=False: playlist montada à mão (ordem não é uma transição de DJ), então não alimenta o grafo global."""
         pid = secrets.token_urlsafe(6)
         self._run("INSERT INTO playlists VALUES(?,?,?,?,?,?)",
                   (pid, uid, title, json.dumps(tags, ensure_ascii=False), json.dumps(track_ids), time.time()))
         pares = [(a, b) for a, b in zip(track_ids, track_ids[1:])]
-        self._run("INSERT INTO graph VALUES(?,?,1) ON CONFLICT(a,b) DO UPDATE SET count=graph.count+1",
-                  pares, many=True)
+        if grafo and pares:
+            self._run("INSERT INTO graph VALUES(?,?,1) ON CONFLICT(a,b) DO UPDATE SET count=graph.count+1",
+                      pares, many=True)
         return pid
+
+    def update_playlist(self, pid, title=None, tags=None, track_ids=None):
+        """Troca só o que for informado (título, tags, lista de faixas). A checagem de dono fica no motor."""
+        campos, args = [], []
+        if title is not None:
+            campos.append("title=?")
+            args.append(title)
+        if tags is not None:
+            campos.append("tags=?")
+            args.append(json.dumps(tags, ensure_ascii=False))
+        if track_ids is not None:
+            campos.append("track_ids=?")
+            args.append(json.dumps(track_ids))
+        if campos:
+            self._run(f"UPDATE playlists SET {', '.join(campos)} WHERE id=?", (*args, pid))
+
+    def delete_playlist(self, pid):
+        self._run("DELETE FROM playlists WHERE id=?", (pid,))
 
     @staticmethod
     def _pl(r):

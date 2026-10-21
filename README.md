@@ -24,7 +24,9 @@ uma faixa leva à outra de forma natural, como um DJ faria, e aprende com o que 
 2. Descreva uma vibe ou digite um artista e toque em **Buscar**.
 3. Em uma faixa, toque em **Criar sequência** para entrar no Modo DJ.
 4. **Aceitar**, **Pular**, **Curtir** ou **Voltar** conforme a sugestão. Quando gostar do set, **Salvar sequência**.
-5. Na playlist salva, **Baixar CSV** ou **Copiar lista** para levar a sequência ao Spotify ou ao YouTube: o CSV traz os links de busca de cada faixa e a lista (`Artista - Título`) pode ser colada em um conversor de playlists, como TuneMyMusic ou Soundiiz. A exportação é feita no navegador, sem login nessas plataformas.
+5. **Playlists** (precisam de conta): em *Playlists* use **Nova playlist**; nos resultados da busca use **Salvar resultados como playlist** ou o **+** de uma faixa para colocá-la em uma playlist existente (ou criar uma na hora).
+6. Dentro de uma playlist dá para **Renomear**, **subir/descer** e **remover** faixas, **Continuar no Modo DJ** e **Excluir playlist**. Só o dono edita; o link compartilhado (`/p/...`) é somente leitura.
+7. **Baixar CSV** ou **Copiar lista** levam a playlist ao Spotify ou ao YouTube: o CSV traz os links de busca de cada faixa e a lista (`Artista - Título`) pode ser colada em um conversor de playlists, como TuneMyMusic ou Soundiiz. A exportação é feita no navegador, sem login nessas plataformas.
 
 ## Como a próxima faixa é escolhida
 
@@ -91,7 +93,7 @@ pip install -r requirements.txt
 #   LASTFM_API_KEY=sua_chave
 #   GETSONGBPM_API_KEY=sua_chave
 python app.py               # http://localhost:5000
-python -m unittest discover -s tests -t .   # 297 testes
+python -m unittest discover -s tests -t .   # 310 testes
 ```
 
 No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e `python3`.
@@ -145,6 +147,7 @@ tools/               diagnósticos das APIs e importador de catálogo
 | `POST /api/session/<id>/bpm` `{delta}` ou `{target}` ou `{auto: true}` | BPM alvo (50–200) ou volta ao automático |
 | `POST /api/session/<id>/like` · `/adjust` `{direction}` · `/save` `{title, tags}` | Curtir (de novo descurte), ajustar a vibe, salvar |
 | `GET /api/playlists` · `/api/playlists/<id>` · `POST /api/playlists/<id>/continue` | Playlists |
+| `POST /api/playlists` · `PATCH /api/playlists/<id>` · `DELETE /api/playlists/<id>` · `POST /api/playlists/<id>/tracks` | Criar, editar (nome, tags, ordem e faixas), excluir e adicionar faixa (só o dono, com login) |
 | `GET/DELETE /api/profile` · `GET/DELETE /api/history` | Privacidade |
 | `POST /api/session/<id>/explain` | Explica em linguagem natural por que a faixa sugerida combina (IA ou regras) |
 | `GET /api/modelo` | Recursos de IA ligados e os pesos da nota (manuais x aprendidos) |

@@ -22,6 +22,9 @@ SESSAO_TTL = 3 * 3600          # sessão parada por 3 h expira (o app guarda tud
 MAX_SESSOES = 5000
 MAX_TEXTO_BUSCA = 200
 LIMITE_RESULTADOS = 10         # faixas mostradas por busca
+MAX_PLAYLISTS = 100            # por conta
+MAX_FAIXAS_PLAYLIST = 200
+MAX_TITULO_PLAYLIST = 80
 MAX_POR_ARTISTA = 3            # no máximo 3 músicas do mesmo artista no topo (variedade)
 ESPERA_SUGESTAO_IA = 20.0      # tempo máximo esperando a IA sugerir artistas (a busca segue sem ela se passar)
 
@@ -514,11 +517,89 @@ class Motor:
         return {"estado": SALVA, "caminho_estados": [SALVANDO, SALVA], "eventos": ["SequenciaSalva"],
                 "playlist_id": pid, "link": f"/p/{pid}", "titulo": titulo, "tags": tags}
 
+    # Playlists: criar, editar, excluir (só o dono) ------------------------------------
+    def _playlist_do_dono(self, user_id, pid):
+        pl = self.store.get_playlist(pid) if isinstance(pid, str) else None
+        if not pl or pl["user_id"] != user_id:
+            raise Erro("Playlist não encontrada.", 404)
+        return pl
+
+    @staticmethod
+    def _titulo_playlist(titulo):
+        t = " ".join(titulo.split()) if isinstance(titulo, str) else ""
+        if not t:
+            raise Erro("Dê um nome para a playlist.")
+        if len(t) > MAX_TITULO_PLAYLIST:
+            raise Erro(f"O nome da playlist pode ter até {MAX_TITULO_PLAYLIST} caracteres.")
+        return t
+
+    @staticmethod
+    def _tags_playlist(tags):
+        if not isinstance(tags, list):
+            raise Erro("As tags devem ser uma lista.")
+        limpas = []
+        for t in tags:
+            t = t.strip().lower()[:20] if isinstance(t, str) else ""
+            if t and t not in limpas:
+                limpas.append(t)
+        return limpas[:8]
+
+    def _faixas_playlist(self, ids):
+        if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
+            raise Erro("A lista de faixas é inválida.")
+        unicas = list(dict.fromkeys(ids))
+        if len(unicas) > MAX_FAIXAS_PLAYLIST:
+            raise Erro(f"Uma playlist pode ter até {MAX_FAIXAS_PLAYLIST} faixas.")
+        if any(i not in self.por_id for i in unicas):
+            raise Erro("Alguma faixa não foi encontrada.", 404)
+        return unicas
+
+    def criar_playlist(self, user_id, titulo, tags=None, track_ids=None):
+        """Playlist nova, vazia ou já com faixas (por exemplo, os resultados de uma busca)."""
+        titulo = self._titulo_playlist(titulo)
+        tags = self._tags_playlist(tags or [])
+        ids = self._faixas_playlist(track_ids or [])
+        if len(self.store.list_playlists(user_id)) >= MAX_PLAYLISTS:
+            raise Erro(f"Você chegou ao limite de {MAX_PLAYLISTS} playlists. Exclua alguma para criar outra.")
+        pid = self.store.save_playlist(user_id, titulo, tags, ids, grafo=False)
+        return {"id": pid, "title": titulo, "tags": tags, "faixas": len(ids), "link": f"/p/{pid}"}
+
+    def editar_playlist(self, user_id, pid, titulo=None, tags=None, track_ids=None):
+        """Renomeia, troca as tags e/ou define a nova ordem e composição das faixas (remover = deixar de fora)."""
+        self._playlist_do_dono(user_id, pid)
+        novo = {}
+        if titulo is not None:
+            novo["title"] = self._titulo_playlist(titulo)
+        if tags is not None:
+            novo["tags"] = self._tags_playlist(tags)
+        if track_ids is not None:
+            novo["track_ids"] = self._faixas_playlist(track_ids)
+        self.store.update_playlist(pid, **novo)
+        pl = self.store.get_playlist(pid)
+        return {"id": pid, "title": pl["title"], "tags": pl["tags"], "faixas": len(pl["track_ids"])}
+
+    def adicionar_faixa_playlist(self, user_id, pid, track_id):
+        pl = self._playlist_do_dono(user_id, pid)
+        if track_id not in self.por_id:
+            raise Erro("Faixa não encontrada.", 404)
+        if track_id in pl["track_ids"]:
+            return {"id": pid, "title": pl["title"], "faixas": len(pl["track_ids"]), "ja_estava": True}
+        ids = self._faixas_playlist(pl["track_ids"] + [track_id])
+        self.store.update_playlist(pid, track_ids=ids)
+        return {"id": pid, "title": pl["title"], "faixas": len(ids), "ja_estava": False}
+
+    def excluir_playlist(self, user_id, pid):
+        self._playlist_do_dono(user_id, pid)
+        self.store.delete_playlist(pid)
+        return {"ok": True}
+
     def continuar_playlist(self, user_id, pid):
         """Reabre uma playlist salva e volta ao Modo DJ a partir da última faixa."""
         pl = self.store.get_playlist(pid)
         if not pl or pl["user_id"] != user_id:
             raise Erro("Playlist não encontrada.", 404)
+        if not pl["track_ids"]:
+            raise Erro("A playlist está vazia. Adicione faixas antes de continuar no Modo DJ.")
         faixas = [self.por_id[i] for i in pl["track_ids"]]
         energia = round(sum(f["energia"] for f in faixas) / len(faixas), 2)
         interp = {"clara": True, "tags": {t: 1 for t in pl["tags"]}, "energia": energia, "generos": [],

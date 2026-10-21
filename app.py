@@ -286,6 +286,31 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
         p["faixas"] = [motor.por_id[i] for i in p["track_ids"]]
         return jsonify(p)
 
+    def dono():
+        """Id da conta logada. Criar, editar e excluir playlists só vale com login."""
+        c = conta_logada()
+        if not c:
+            raise Erro("Entre na sua conta para gerenciar playlists.", 403)
+        return c["id"]
+
+    @app.post("/api/playlists")
+    def criar_playlist():
+        b = corpo()
+        return jsonify(motor.criar_playlist(dono(), b.get("title"), b.get("tags"), b.get("track_ids"))), 201
+
+    @app.patch("/api/playlists/<pid>")
+    def editar_playlist(pid):
+        b = corpo()
+        return jsonify(motor.editar_playlist(dono(), pid, b.get("title"), b.get("tags"), b.get("track_ids")))
+
+    @app.delete("/api/playlists/<pid>")
+    def excluir_playlist(pid):
+        return jsonify(motor.excluir_playlist(dono(), pid))
+
+    @app.post("/api/playlists/<pid>/tracks")
+    def adicionar_faixa(pid):
+        return jsonify(motor.adicionar_faixa_playlist(dono(), pid, corpo().get("track_id")))
+
     @app.post("/api/playlists/<pid>/continue")
     def continuar(pid):
         return jsonify(motor.continuar_playlist(uid(), pid))

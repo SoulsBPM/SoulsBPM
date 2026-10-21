@@ -33,6 +33,11 @@ const P = {
   warn: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/>',
   note: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
   plus: '<path d="M5 12h14M12 5v14"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  edit: '<path d="M21.2 6.8a1 1 0 0 0-4-4L3.8 16.2a2 2 0 0 0-.5.8l-1.3 4.4a.5.5 0 0 0 .6.6l4.4-1.3a2 2 0 0 0 .8-.5z"/><path d="m15 5 4 4"/>',
+  up: '<path d="m18 15-6-6-6 6"/>',
+  down: '<path d="m6 9 6 6 6-6"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
   back: '<path d="m15 18-6-6 6-6"/>',
   chev: '<path d="m9 18 6-6-6-6"/>',
   shield: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>',
@@ -397,17 +402,21 @@ function telaResultados(r) {
   abas("buscar"); S.res = r;
   app.innerHTML = topbar("Nova busca") + `
     <div><h2 class="titulo-p">Resultados</h2><p class="mudo" style="margin-top:6px">${esc(r.interpretacao.resumo)}</p></div>
+    <div><button class="btn btn-sec pequeno" id="salvar-res" type="button">${ic("save")} Salvar resultados como playlist</button></div>
     <section class="painel tabela">
       <div class="th"><span></span><span>Faixa</span><span class="so-tec">BPM</span><span class="so-tec">Chave</span><span class="so-tec">Energia</span><span></span></div>
       ${r.resultados.map((f, i) => `
       <div class="tr"><span class="n">${i + 1}</span>
         <div class="tx">${capa(f, "p")}<div style="min-width:0"><div class="tit">${esc(f.titulo)}</div><div class="art">${esc(f.artista)}</div>${ouvir(f)}</div></div>
         <div class="meta so-tec"><span class="bpm-v">${f.bpm}</span>${chave(f.tom)}${energia(f.energia)}</div>
-        <div class="acao"><button class="btn btn-pri pequeno" data-id="${f.id}">${ic("disc")} Criar sequência</button></div>
+        <div class="acao"><button class="btn btn-pri pequeno" data-id="${f.id}">${ic("disc")} Criar sequência</button>
+          <button class="btn btn-sec pequeno icone" data-add="${f.id}" type="button" title="Adicionar a uma playlist" aria-label="Adicionar ${esc(f.titulo)} a uma playlist">${ic("plus")}</button></div>
       </div>`).join("")}
     </section>`;
   ligaVoltar(() => telaInicio());
   app.querySelectorAll("[data-id]").forEach(b => b.onclick = () => entrarDJ(b.dataset.id));
+  app.querySelectorAll("[data-add]").forEach(b => b.onclick = () => adicionarAPlaylist(r.resultados.find(f => f.id === b.dataset.add)));
+  $("#salvar-res").onclick = () => salvarResultadosComoPlaylist(r);
   paraTop();
 }
 const entrarDJ = id => comSpinner(async () => {
@@ -548,6 +557,68 @@ function telaDJ(d, aviso) {
   if (!quieto) paraTop();
 }
 
+/* ---------- Gerenciar playlists: pedir nome, escolher playlist, adicionar faixa ---------- */
+function pedeNome(titulo, valor, rotuloOk) {
+  return new Promise(res => {
+    const dlg = $("#dlg-nome"), inp = $("#nome-in");
+    $("#nome-tit").textContent = titulo; $("#nome-ok").textContent = rotuloOk; inp.value = valor || "";
+    const fim = v => { fechaDlg(dlg); res(v); };
+    $("#nome-form").onsubmit = e => { e.preventDefault(); const v = inp.value.trim(); if (v) fim(v); else inp.focus(); };
+    $("#nome-no").onclick = () => fim(null);
+    dlg.oncancel = e => { e.preventDefault(); fim(null); };
+    dlg.showModal(); inp.focus(); inp.select();
+  });
+}
+async function pedeContaPlaylist() {
+  const vai = await confirma("Entre para usar playlists", "As playlists ficam guardadas na sua conta. Crie uma conta grátis ou entre para continuar.",
+                             "Entrar ou criar conta", "Agora não");
+  if (vai) location.assign("/login");
+}
+/* cria uma playlist (vazia ou com faixas) e devolve { id, title, faixas } ou null se a pessoa desistiu */
+async function novaPlaylist(sugestao = "", ids = [], tags = []) {
+  const nome = await pedeNome("Nova playlist", sugestao, "Criar");
+  if (!nome) return null;
+  return api("POST", "/api/playlists", { title: nome, track_ids: ids, tags });
+}
+/* janela com as playlists da pessoa; devolve a escolhida (ou a recém-criada) */
+async function escolhePlaylist(texto) {
+  let lista;
+  try { ({ playlists: lista } = await api("GET", "/api/playlists")); } catch (e) { toast(e.message); return null; }
+  return new Promise(res => {
+    const dlg = $("#dlg-pl"), box = $("#pl-lista");
+    $("#pl-txt").textContent = texto;
+    box.innerHTML = lista.length
+      ? lista.map(p => `<button class="btn btn-sec" type="button" data-pl="${esc(p.id)}">${esc(p.title)} <span class="mudo">· ${p.faixas}</span></button>`).join("")
+      : `<p class="mudo">Você ainda não tem playlists. Crie a primeira.</p>`;
+    const fim = v => { fechaDlg(dlg); res(v); };
+    box.querySelectorAll("[data-pl]").forEach(b => b.onclick = () => fim(lista.find(p => p.id === b.dataset.pl)));
+    $("#pl-fechar").onclick = () => fim(null);
+    $("#pl-nova").onclick = async () => {
+      dlg.close();
+      try { fim(await novaPlaylist()); } catch (e) { toast(e.message); fim(null); }
+    };
+    dlg.oncancel = e => { e.preventDefault(); fim(null); };
+    dlg.showModal();
+  });
+}
+async function adicionarAPlaylist(faixa) {
+  if (!logado()) return pedeContaPlaylist();
+  const pl = await escolhePlaylist(`${faixa.titulo}, ${faixa.artista}`);
+  if (!pl) return;
+  try {
+    const r = await api("POST", `/api/playlists/${pl.id}/tracks`, { track_id: faixa.id });
+    toast(r.ja_estava ? `Já estava em “${pl.title}”` : `Adicionada a “${pl.title}”`);
+  } catch (e) { toast(e.message); }
+}
+async function salvarResultadosComoPlaylist(r) {
+  if (!logado()) return pedeContaPlaylist();
+  const t = S.busca ? S.busca.charAt(0).toUpperCase() + S.busca.slice(1) : "Minha playlist";
+  try {
+    const pl = await novaPlaylist(t.slice(0, 80), r.resultados.map(f => f.id), r.interpretacao.tags.slice(0, 4));
+    if (pl) toast(`Playlist “${pl.title}” criada com ${pl.faixas} faixas`);
+  } catch (e) { toast(e.message); }
+}
+
 /* ---------- Salvar sequência ---------- */
 function telaSalvar(d) {
   pararReproducao(); abas("buscar", true);
@@ -645,57 +716,89 @@ async function telaPlaylists() {
     app.innerHTML = `<h1 class="titulo-p">Playlists</h1>` + (playlists.length
       ? `<section class="painel lista">${playlists.map(p => `<button class="item clic" data-pl="${p.id}"><div class="capa p" style="--k:#7a66ff;--a:${90 + semente(p.id) % 180}deg">${ic("list")}</div><div class="tx">
           <div class="tit">${esc(p.title)}</div><div class="art">${p.faixas} faixas</div><div class="tags-i">${p.tags.map(esc).join(", ")}</div></div>${ic("chev", "ic seta")}</button>`).join("")}</section>`
-      : `<div class="vazio">${userId() || logado() ? "Nenhuma playlist ainda. Faça uma busca e salve uma sequência." : "Você não permitiu que eu lembre, então nada é guardado."}</div>`)
-      + `<div class="fim"><button class="btn btn-pri cheio" id="nova">${ic("plus")} Nova busca</button></div>`;
+      : `<div class="vazio">${userId() || logado() ? "Nenhuma playlist ainda. Crie uma agora, ou faça uma busca e salve os resultados ou uma sequência do Modo DJ." : "Você não permitiu que eu lembre, então nada é guardado."}</div>`)
+      + `<div class="fim"><button class="btn btn-pri cheio" id="nova-pl">${ic("plus")} Nova playlist</button>
+         <button class="btn btn-sec cheio" id="nova">${ic("search")} Nova busca</button></div>`;
     app.querySelectorAll("[data-pl]").forEach(b => b.onclick = () => telaPlaylist(b.dataset.pl, true));
     $("#nova").onclick = () => { S.busca = ""; telaInicio(); };
+    $("#nova-pl").onclick = async () => {
+      try { const pl = await novaPlaylist(); if (pl) telaPlaylist(pl.id, true); } catch (e) { toast(e.message); }
+    };
   } catch (e) { app.innerHTML = erroHtml(e.message); }
 }
-async function telaPlaylist(pid, minha) {
+async function telaPlaylist(pid, minha, manterScroll = false) {
+  const y = window.scrollY;
   pararReproducao(); abas("playlists");
   try {
     const p = await api("GET", "/api/playlists/" + pid);
-    const url = location.origin + "/p/" + pid;
-    app.innerHTML = (minha ? topbar("Playlists") : topbar("Início")) + `<h2 class="titulo-p">${esc(p.title)}</h2>
+    const url = location.origin + "/p/" + pid, n = p.faixas.length;
+    const acoes = (f, i) => minha ? `<div class="acao">
+        <button class="btn btn-sec pequeno icone" data-sobe="${i}" type="button" aria-label="Subir ${esc(f.titulo)}" title="Subir" ${i === 0 ? "disabled" : ""}>${ic("up")}</button>
+        <button class="btn btn-sec pequeno icone" data-desce="${i}" type="button" aria-label="Descer ${esc(f.titulo)}" title="Descer" ${i === n - 1 ? "disabled" : ""}>${ic("down")}</button>
+        <button class="btn btn-sec pequeno icone" data-tira="${i}" type="button" aria-label="Remover ${esc(f.titulo)} da playlist" title="Remover da playlist">${ic("x")}</button></div>` : `<div class="acao"></div>`;
+    app.innerHTML = (minha ? topbar("Playlists") : topbar("Início")) + `<div class="cab-pl"><h2 class="titulo-p">${esc(p.title)}</h2>
+      ${minha ? `<button class="btn btn-sec pequeno" id="renomear" type="button">${ic("edit")} Renomear</button>` : ""}</div>
       <div class="chips">${p.tags.map(t => `<span class="chip mini">${esc(t)}</span>`).join("")}</div>
-      <section class="painel tabela">
+      ${n ? `<section class="painel tabela">
         <div class="th"><span></span><span>Faixa</span><span class="so-tec">BPM</span><span class="so-tec">Chave</span><span class="so-tec">Energia</span><span></span></div>
         ${p.faixas.map((f, i) => `<div class="tr"><span class="n">${i + 1}</span>
           <div class="tx">${capa(f, "p")}<div style="min-width:0"><div class="tit">${esc(f.titulo)}</div><div class="art">${esc(f.artista)}</div>${ouvir(f)}</div></div>
-          <div class="meta so-tec"><span class="bpm-v">${f.bpm}</span>${chave(f.tom)}${energia(f.energia)}</div><div class="acao"></div></div>`).join("")}
-      </section>
+          <div class="meta so-tec"><span class="bpm-v">${f.bpm}</span>${chave(f.tom)}${energia(f.energia)}</div>${acoes(f, i)}</div>`).join("")}
+      </section>` : `<div class="vazio">${minha ? "Playlist vazia. Faça uma busca e toque no + de uma faixa para adicioná-la aqui." : "Esta playlist está vazia."}</div>`}
       <div class="fim">
-        ${minha ? `<button class="btn btn-pri cheio" id="cont">Continuar no Modo DJ</button>` : `<button class="btn btn-pri cheio" id="montar">Montar a minha</button>`}
+        ${minha ? `<button class="btn btn-pri cheio" id="cont" ${n ? "" : "disabled"}>Continuar no Modo DJ</button>` : `<button class="btn btn-pri cheio" id="montar">Montar a minha</button>`}
         <button class="btn btn-sec cheio" id="copiar">${ic("copy")} Copiar link</button></div>
-      <section class="painel exportar" aria-label="Exportar playlist">
+      ${n ? `<section class="painel exportar" aria-label="Exportar playlist">
         <h3>Levar para o Spotify ou YouTube</h3>
-        <p class="mudo">Baixe a lista ou copie os nomes e cole em um conversor de playlists (por exemplo TuneMyMusic ou Soundiiz). Cada faixa também tem os botões de Spotify e YouTube acima.</p>
+        <p class="mudo">Baixe a lista ou copie os nomes e cole em um conversor de playlists (por exemplo TuneMyMusic ou Soundiiz). Cada faixa também tem os botões de Spotify e YouTube.</p>
         <div class="fim"><button class="btn btn-sec cheio" id="baixar-csv">${ic("list")} Baixar CSV</button>
         <button class="btn btn-sec cheio" id="copiar-lista">${ic("copy")} Copiar lista</button></div>
-      </section>`;
+      </section>` : ""}
+      ${minha ? `<div class="fim"><button class="btn btn-sec cheio perigo" id="excluir" type="button">${ic("trash")} Excluir playlist</button></div>` : ""}`;
     ligaVoltar(minha ? telaPlaylists : irInicio);
     $("#montar")?.addEventListener("click", irInicio);
-    $("#baixar-csv").onclick = () => {
+    $("#copiar").onclick = async () => { try { await navigator.clipboard.writeText(url); } catch {} $("#copiar").innerHTML = `${ic("check")} Link copiado`; };
+    $("#baixar-csv")?.addEventListener("click", () => {
       const blob = new Blob([Exportar.csvDaPlaylist(p)], { type: "text/csv;charset=utf-8" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob); a.download = Exportar.nomeDoArquivo(p);
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    };
-    $("#copiar-lista").onclick = async () => {
+    });
+    $("#copiar-lista")?.addEventListener("click", async () => {
       try { await navigator.clipboard.writeText(Exportar.textoDaPlaylist(p)); toast("Lista copiada"); }
       catch { toast("Não consegui copiar. Use o CSV."); }
-    };
-    $("#copiar").onclick = async () => { try { await navigator.clipboard.writeText(url); } catch {} $("#copiar").innerHTML = `${ic("check")} Link copiado`; };
-    $("#cont")?.addEventListener("click", async () => {
-      try {
-        const d = await api("POST", `/api/playlists/${pid}/continue`);
-        S.sid = d.session_id; S.busca = p.title; S.salvo = true;
-        S.origem = { rotulo: "Playlist", fn: () => telaPlaylist(pid, true) };
-        telaDJ(d);
-      } catch (e) { toast(e.message); }
     });
-    paraTop();
+    if (minha) {
+      const salva = async (ids, msg) => {
+        try { await api("PATCH", "/api/playlists/" + pid, { track_ids: ids }); await telaPlaylist(pid, true, true); if (msg) toast(msg); }
+        catch (e) { toast(e.message); }
+      };
+      const ids = p.faixas.map(f => f.id);
+      const troca = (i, j) => { const c = ids.slice(); [c[i], c[j]] = [c[j], c[i]]; return c; };
+      app.querySelectorAll("[data-sobe]").forEach(b => b.onclick = () => salva(troca(+b.dataset.sobe, +b.dataset.sobe - 1)));
+      app.querySelectorAll("[data-desce]").forEach(b => b.onclick = () => salva(troca(+b.dataset.desce, +b.dataset.desce + 1)));
+      app.querySelectorAll("[data-tira]").forEach(b => b.onclick = () => salva(ids.filter((_, k) => k !== +b.dataset.tira), "Faixa removida"));
+      $("#renomear").onclick = async () => {
+        const nome = await pedeNome("Renomear playlist", p.title, "Salvar");
+        if (!nome || nome === p.title) return;
+        try { await api("PATCH", "/api/playlists/" + pid, { title: nome }); await telaPlaylist(pid, true, true); toast("Playlist renomeada"); }
+        catch (e) { toast(e.message); }
+      };
+      $("#excluir").onclick = async () => {
+        if (!(await confirma("Excluir playlist?", `“${p.title}” será apagada e o link compartilhado deixa de funcionar. Isso não pode ser desfeito.`, "Excluir", "Cancelar"))) return;
+        try { await api("DELETE", "/api/playlists/" + pid); toast("Playlist excluída"); telaPlaylists(); } catch (e) { toast(e.message); }
+      };
+      $("#cont")?.addEventListener("click", async () => {
+        try {
+          const d = await api("POST", `/api/playlists/${pid}/continue`);
+          S.sid = d.session_id; S.busca = p.title; S.salvo = true;
+          S.origem = { rotulo: "Playlist", fn: () => telaPlaylist(pid, true) };
+          telaDJ(d);
+        } catch (e) { toast(e.message); }
+      });
+    }
+    if (manterScroll) window.scrollTo({ top: y }); else paraTop();
   } catch (e) { app.innerHTML = topbar("Início") + erroHtml(e.message); ligaVoltar(irInicio); }
 }
 /* link compartilhado (/p/...): sai dele e volta à página inicial */
