@@ -666,9 +666,26 @@ async function telaPlaylist(pid, minha) {
       </section>
       <div class="fim">
         ${minha ? `<button class="btn btn-pri cheio" id="cont">Continuar no Modo DJ</button>` : `<button class="btn btn-pri cheio" id="montar">Montar a minha</button>`}
-        <button class="btn btn-sec cheio" id="copiar">${ic("copy")} Copiar link</button></div>`;
+        <button class="btn btn-sec cheio" id="copiar">${ic("copy")} Copiar link</button></div>
+      <section class="painel exportar" aria-label="Exportar playlist">
+        <h3>Levar para o Spotify ou YouTube</h3>
+        <p class="mudo">Baixe a lista ou copie os nomes e cole em um conversor de playlists (por exemplo TuneMyMusic ou Soundiiz). Cada faixa também tem os botões de Spotify e YouTube acima.</p>
+        <div class="fim"><button class="btn btn-sec cheio" id="baixar-csv">${ic("list")} Baixar CSV</button>
+        <button class="btn btn-sec cheio" id="copiar-lista">${ic("copy")} Copiar lista</button></div>
+      </section>`;
     ligaVoltar(minha ? telaPlaylists : irInicio);
     $("#montar")?.addEventListener("click", irInicio);
+    $("#baixar-csv").onclick = () => {
+      const blob = new Blob([Exportar.csvDaPlaylist(p)], { type: "text/csv;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = Exportar.nomeDoArquivo(p);
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    };
+    $("#copiar-lista").onclick = async () => {
+      try { await navigator.clipboard.writeText(Exportar.textoDaPlaylist(p)); toast("Lista copiada"); }
+      catch { toast("Não consegui copiar. Use o CSV."); }
+    };
     $("#copiar").onclick = async () => { try { await navigator.clipboard.writeText(url); } catch {} $("#copiar").innerHTML = `${ic("check")} Link copiado`; };
     $("#cont")?.addEventListener("click", async () => {
       try {

@@ -24,6 +24,7 @@ uma faixa leva à outra de forma natural, como um DJ faria, e aprende com o que 
 2. Descreva uma vibe ou digite um artista e toque em **Buscar**.
 3. Em uma faixa, toque em **Criar sequência** para entrar no Modo DJ.
 4. **Aceitar**, **Pular**, **Curtir** ou **Voltar** conforme a sugestão. Quando gostar do set, **Salvar sequência**.
+5. Na playlist salva, **Baixar CSV** ou **Copiar lista** para levar a sequência ao Spotify ou ao YouTube: o CSV traz os links de busca de cada faixa e a lista (`Artista - Título`) pode ser colada em um conversor de playlists, como TuneMyMusic ou Soundiiz. A exportação é feita no navegador, sem login nessas plataformas.
 
 ## Como a próxima faixa é escolhida
 
@@ -90,7 +91,7 @@ pip install -r requirements.txt
 #   LASTFM_API_KEY=sua_chave
 #   GETSONGBPM_API_KEY=sua_chave
 python app.py               # http://localhost:5000
-python -m unittest discover -s tests -t .   # 291 testes
+python -m unittest discover -s tests -t .   # 297 testes
 ```
 
 No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e `python3`.

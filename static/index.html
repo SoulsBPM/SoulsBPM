@@ -61,6 +61,7 @@ document.querySelector('meta[name="theme-color"]').setAttribute("content",t==="c
   </div>
 </dialog>
 <script>fetch("/api/health").then(r => r.json()).then(h => { if (h.ao_vivo) { document.getElementById("credito").hidden = false; document.documentElement.dataset.aovivo = "1"; } }).catch(() => {});</script>
+<script src="/static/exportar.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
