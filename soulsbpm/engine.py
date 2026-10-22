@@ -50,6 +50,9 @@ class Sessao:
         self.volta = []            # pilha do botão Voltar: um item por aceite ou pulo da faixa atual
         self.curtidas = set()      # faixas curtidas nesta sessão (curtir de novo desfaz)
         self.bpm_alvo = None       # BPM que o DJ quer atingir (None = a IA segue só a vibe)
+        self.destino = None        # id da playlist onde as faixas do set são guardadas conforme a pessoa aceita
+        self.salvos = []           # faixas que ESTA sessão pôs no destino (só essas saem se deixarem o set)
+        self.aviso_destino = None  # recado único para a tela (ex.: a playlist foi excluída)
         self.ultimo = time.monotonic()   # último uso (para expirar sessões paradas)
 
 
@@ -174,6 +177,7 @@ class Motor:
                 "motivos": r.get("motivos", []), "rumo": r.get("rumo")}
 
     def _estado_dj(self, s, caminho, eventos):
+        self._sincroniza_destino(s)            # toda ação que muda o set passa por aqui: a playlist de destino acompanha
         return {"session_id": s.id, "estado": s.estado, "caminho_estados": caminho, "eventos": eventos,
                 "interpretacao": self._interp_publica(s.interp),
                 "atual": self._pub_faixa(self._atual(s)),
@@ -183,7 +187,60 @@ class Motor:
                 "pode_desfazer": bool(s.aceites) and bool(s.sequencia) and s.aceites[-1]["faixa_id"] == s.sequencia[-1],
                 "pode_voltar": bool(s.volta) or len(s.sequencia) > 1,
                 "curtida": bool(s.sequencia) and s.sequencia[-1] in s.curtidas,
-                "dica": ("ajustar_vibe" if s.pulos_seguidos >= PULOS_PARA_AJUSTE else None)}
+                "dica": ("ajustar_vibe" if s.pulos_seguidos >= PULOS_PARA_AJUSTE else None),
+                "destino": self._destino_publico(s), "aviso_destino": self._pega_aviso(s)}
+
+    def _destino_publico(self, s):
+        if not s.destino:
+            return None
+        pl = self.store.get_playlist(s.destino)
+        if not pl:
+            return None
+        return {"id": pl["id"], "title": pl["title"], "faixas": len(pl["track_ids"])}
+
+    @staticmethod
+    def _pega_aviso(s):
+        a, s.aviso_destino = s.aviso_destino, None
+        return a
+
+    def _sincroniza_destino(self, s):
+        """Deixa a playlist de destino igual ao set: entra o que foi aceito e sai o que esta sessão pôs e depois
+        tirou (aceite desfeito, faixa pulada, Voltar). O que já estava na playlist antes nunca é removido."""
+        if not s.destino:
+            return
+        pl = self.store.get_playlist(s.destino)
+        if not pl or pl["user_id"] != s.user_id:
+            s.destino, s.salvos = None, []
+            s.aviso_destino = "A playlist de destino não existe mais. As próximas faixas não serão salvas."
+            return
+        ids = list(pl["track_ids"])
+        for fid in [f for f in s.salvos if f not in s.sequencia]:
+            s.salvos.remove(fid)
+            if fid in ids:
+                ids.remove(fid)
+        for fid in s.sequencia:
+            if fid not in ids:
+                ids.append(fid)
+                s.salvos.append(fid)
+        if len(ids) > MAX_FAIXAS_PLAYLIST:
+            s.destino, s.salvos = None, []
+            s.aviso_destino = f"A playlist chegou a {MAX_FAIXAS_PLAYLIST} faixas, então parei de salvar nela."
+            return
+        if ids != pl["track_ids"]:
+            self.store.update_playlist(s.destino, track_ids=ids)
+
+    def definir_destino(self, sid, user_id, pid):
+        """Escolhe (ou, com pid=None, tira) a playlist onde o set vai sendo salvo. As faixas que já estão no set
+        entram na playlist na hora."""
+        s = self.sessao(sid)
+        if s.user_id != user_id:
+            raise Erro("Sessão não encontrada.", 404)
+        if pid is None:
+            s.destino, s.salvos = None, []
+        else:
+            self._playlist_do_dono(user_id, pid)
+            s.destino, s.salvos = pid, []
+        return self._estado_dj(s, [s.estado], ["DestinoDefinido"])
 
     @staticmethod
     def _pub_faixa(f):
@@ -607,6 +664,7 @@ class Motor:
         self._limpar_sessoes()
         s = Sessao(user_id, pl["title"], interp)
         s.sequencia = list(pl["track_ids"])
+        s.destino = pid                                       # o que for aceito daqui em diante entra nesta playlist
         self.sessoes[s.id] = s
         self._sugerir(s)
         s.estado = SUGERINDO

@@ -606,3 +606,10 @@ html[data-aovivo] .cred-bpm{display:inline}
 .btn.perigo{color:var(--erro-txt);border-color:currentColor}
 #dlg-pl .linha.col .btn{justify-content:center}
 #nome-in{margin:6px 0 4px}
+
+/* playlist de destino no Modo DJ */
+.destino{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border:1px dashed var(--linha-forte);border-radius:var(--r-painel);color:var(--mudo);font-size:15px}
+.destino.on{border-style:solid;border-color:var(--indigo);color:var(--texto)}
+.destino .ic{width:18px;height:18px;flex:none}
+.destino span{flex:1;min-width:180px}
+.destino .link-sub{min-height:36px;padding:4px 8px}

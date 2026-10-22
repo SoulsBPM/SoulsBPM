@@ -465,6 +465,7 @@ function telaDJ(d, aviso) {
   const quieto = !!app.querySelector(".dj");           // já estava no Modo DJ: só atualiza, sem reanimar nem rolar
   app.classList.toggle("sem-anim", quieto);
   const a = d.atual, p = d.sugerida, alvo = d.bpm_alvo;
+  if (d.destino) S.salvo = true;                         // o set vai sendo guardado na playlist de destino
   if (!S.tocando || S.tocando.id !== a.id) iniciarReproducao(a);
   const rotulo = { combina_bem: "Combina bem", ok: "Compatível", arriscada: "Transição arriscada" };
   const e10 = e => `energia ${Math.round(e * 10)}/10`;
@@ -472,6 +473,11 @@ function telaDJ(d, aviso) {
     ${topbar(S.origem ? S.origem.rotulo : "Início", "", `<label class="chave" title="Mostra BPM, chave Camelot, energia e % de compatibilidade">
       <input type="checkbox" id="modo-tecnico" ${document.body.classList.contains("tecnico") ? "checked" : ""}><span class="sw"></span>Visão técnica</label>`)}
     ${aviso ? `<div class="aviso">${esc(aviso)}</div>` : ""}
+    ${logado() ? `<div class="destino ${d.destino ? "on" : ""}">${d.destino
+      ? `${ic("save")}<span>Salvando em <strong>${esc(d.destino.title)}</strong> · ${d.destino.faixas} ${d.destino.faixas === 1 ? "faixa" : "faixas"}</span>
+         <button class="link-sub" id="b-destino" type="button">Trocar</button><button class="link-sub" id="b-sem-destino" type="button">Parar</button>`
+      : `${ic("list")}<span>Nenhuma playlist escolhida: as faixas aceitas não são guardadas.</span>
+         <button class="link-sub" id="b-destino" type="button">Escolher playlist</button>`}</div>` : ""}
     <div class="dj">
       <section class="painel traj">
         <div class="ph">${ic("chart")} Trajetória do set <span class="fim-ph">${d.sequencia.length} ${d.sequencia.length === 1 ? "faixa" : "faixas"}</span></div>
@@ -486,7 +492,7 @@ function telaDJ(d, aviso) {
           <div class="deck-id">${capa(a)}<div class="tx"><div class="tit">${esc(a.titulo)}</div><div class="art">${esc(a.artista)}</div>${ouvir(a)}</div></div>
           <div class="stats so-tec"><div class="stat"><span class="bpm-v">${a.bpm}</span><span class="u">BPM</span></div>${chave(a.tom, true)}
             <span class="en-l">${energia(a.energia)} ${e10(a.energia)}</span></div>
-          <p class="mudo nota-ouvir">Ouça no Spotify ou no YouTube e volte aqui para aceitar ou pular.</p>
+          <p class="mudo nota-ouvir">Ouça no Spotify ou no YouTube e volte aqui para salvar na playlist ou pular.</p>
         </div>
       </section>
       <section class="painel deck-ia">
@@ -515,16 +521,40 @@ function telaDJ(d, aviso) {
       <button class="btn btn-sec" id="b-pular" type="button">${ic("skip")} Pular</button>
       <button class="btn so-ico ${d.curtida ? "btn-pri" : "btn-sec"}" id="b-curtir" type="button" aria-label="Curtir" aria-pressed="${!!d.curtida}">${ic("heart")}<span class="rot-s">${d.curtida ? "Curtida" : "Curtir"}</span></button>
       <button class="btn btn-sec so-ico" id="b-salvar" type="button" aria-label="Salvar sequência" ${d.sequencia.length < 2 ? "disabled title='Aceite uma sugestão primeiro'" : ""}>${ic("save")}<span class="rot-s">Salvar sequência</span></button>
-      <button class="btn btn-pri" id="b-aceitar" type="button" ${p ? "" : "disabled"}>${ic("check")} Aceitar</button>
+      <button class="btn btn-pri" id="b-aceitar" type="button" ${p ? "" : "disabled"}>${logado() ? `${ic("save")} Salvar na playlist` : `${ic("check")} Aceitar`}</button>
     </div>`;
   S.redesenha = () => desenhaTraj(d.sequencia, p, alvo);
   S.redesenha();
   const chama = (url, body, av) => comSpinner(async () => {
-    try { telaDJ(await api("POST", `/api/session/${S.sid}/${url}`, body), av); } catch (e) { toast(e.message); }
+    try {
+      const r = await api("POST", `/api/session/${S.sid}/${url}`, body);
+      telaDJ(r, av);
+      if (r.aviso_destino) toast(r.aviso_destino);
+      else if (url === "accept" && r.destino) toast(`Salva em “${r.destino.title}”`);
+    } catch (e) { toast(e.message); }
   });
   ligaVoltar(sairDoDJ);
   $("#modo-tecnico").onchange = e => setTecnico(e.target.checked);
-  $("#b-aceitar").onclick = () => chama("accept");
+  const defineDestino = async pid => {                            // pid null = parar de salvar
+    try {
+      const r = await api("POST", `/api/session/${S.sid}/destination`, { playlist_id: pid });
+      S.salvo = !!r.destino;                                      // com destino, o set já está guardado
+      telaDJ(r);
+      return true;
+    } catch (e) { toast(e.message); return false; }
+  };
+  $("#b-aceitar").onclick = async () => {
+    if (logado() && !d.destino) {                                // primeiro "Salvar na playlist": pergunta onde
+      const pl = await escolhePlaylist("Em qual playlist salvar as faixas que você aceitar?");
+      if (!pl || !(await defineDestino(pl.id))) return;
+    }
+    chama("accept");
+  };
+  $("#b-destino")?.addEventListener("click", async () => {
+    const pl = await escolhePlaylist("Em qual playlist salvar as faixas que você aceitar?");
+    if (pl) defineDestino(pl.id);
+  });
+  $("#b-sem-destino")?.addEventListener("click", () => defineDestino(null));
   $("#b-desfazer")?.addEventListener("click", () => chama("undo-accept"));
   $("#b-bpm-mais").onclick = () => chama("bpm", { delta: 5 });
   $("#b-bpm-menos").onclick = () => chama("bpm", { delta: -5 });

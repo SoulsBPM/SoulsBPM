@@ -271,6 +271,13 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
         b = corpo()
         return jsonify(motor.salvar(sid, b.get("title"), b.get("tags")))
 
+    @app.post("/api/session/<sid>/destination")
+    def destino(sid):
+        c = conta_logada()
+        if not c:
+            return jsonify({"erro": "Entre na sua conta para salvar em playlists.", "precisa_conta": True}), 403
+        return jsonify(motor.definir_destino(sid, c["id"], corpo().get("playlist_id")))
+
     @app.get("/api/playlists")
     def playlists():
         u = uid()
