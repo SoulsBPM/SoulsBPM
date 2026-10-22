@@ -23,7 +23,7 @@ class ContasTests(unittest.TestCase):
         self.c = self.app.test_client()
 
     def cadastrar(self, nome="maria", senha="senha-forte-1", **extra):
-        return self.c.post("/api/auth/register", json={"nome": nome, "senha": senha, **extra})
+        return self.c.post("/api/auth/register", json={"nome": nome, "email": f"{nome}@exemplo.com", "senha": senha, **extra})
 
     def test_cadastro_loga_e_me_mostra_o_nome(self):
         r = self.cadastrar()
@@ -37,7 +37,7 @@ class ContasTests(unittest.TestCase):
     def test_nome_repetido_ignora_maiusculas(self):
         self.cadastrar("Maria")
         self.assertEqual(self.app.test_client().post("/api/auth/register",
-                         json={"nome": "MARIA", "senha": "outra-senha-1"}).status_code, 409)
+                         json={"nome": "MARIA", "email": "MARIA@exemplo.com", "senha": "outra-senha-1"}).status_code, 409)
 
     def test_senha_curta_e_nome_invalido_dao_400(self):
         self.assertEqual(self.cadastrar(senha="curta").status_code, 400)
@@ -47,9 +47,9 @@ class ContasTests(unittest.TestCase):
     def test_login_certo_e_errado(self):
         self.cadastrar()
         outro = self.app.test_client()
-        self.assertEqual(outro.post("/api/auth/login", json={"nome": "maria", "senha": "errada-errada"}).status_code, 401)
-        self.assertEqual(outro.post("/api/auth/login", json={"nome": "naoexiste", "senha": "senha-forte-1"}).status_code, 401)
-        self.assertEqual(outro.post("/api/auth/login", json={"nome": "MARIA", "senha": "senha-forte-1"}).status_code, 200)
+        self.assertEqual(outro.post("/api/auth/login", json={"nome": "maria", "email": "maria@exemplo.com", "senha": "errada-errada"}).status_code, 401)
+        self.assertEqual(outro.post("/api/auth/login", json={"nome": "naoexiste", "email": "naoexiste@exemplo.com", "senha": "senha-forte-1"}).status_code, 401)
+        self.assertEqual(outro.post("/api/auth/login", json={"nome": "MARIA", "email": "MARIA@exemplo.com", "senha": "senha-forte-1"}).status_code, 200)
         self.assertTrue(outro.get("/api/auth/me").get_json()["logado"])
 
     def test_senha_nao_e_guardada_em_texto(self):
@@ -75,7 +75,7 @@ class ContasTests(unittest.TestCase):
         self.assertEqual(self.c.get("/api/recent").get_json()["buscas"], ["música calma para estudar à noite"])
         outro = self.app.test_client()
         self.assertEqual(outro.get("/api/recent").get_json()["buscas"], [])
-        outro.post("/api/auth/login", json={"nome": "maria", "senha": "senha-forte-1"})
+        outro.post("/api/auth/login", json={"nome": "maria", "email": "maria@exemplo.com", "senha": "senha-forte-1"})
         self.assertEqual(outro.get("/api/recent").get_json()["buscas"], ["música calma para estudar à noite"])
 
     def test_cadastro_leva_o_historico_anonimo(self):
@@ -100,8 +100,8 @@ class ContasTests(unittest.TestCase):
 
     def test_tentativas_demais_levam_429(self):
         for _ in range(10):
-            self.c.post("/api/auth/login", json={"nome": "x", "senha": "yyyyyyyy"})
-        self.assertEqual(self.c.post("/api/auth/login", json={"nome": "x", "senha": "yyyyyyyy"}).status_code, 429)
+            self.c.post("/api/auth/login", json={"nome": "x", "email": "x@exemplo.com", "senha": "yyyyyyyy"})
+        self.assertEqual(self.c.post("/api/auth/login", json={"nome": "x", "email": "x@exemplo.com", "senha": "yyyyyyyy"}).status_code, 429)
 
 
 class PlaylistsSoComContaTests(unittest.TestCase):
@@ -128,7 +128,7 @@ class PlaylistsSoComContaTests(unittest.TestCase):
         self.assertEqual(self.c.get("/api/playlists?user_id=u_visitante").get_json()["playlists"], [])
 
     def test_com_conta_salva_e_lista(self):
-        self.c.post("/api/auth/register", json={"nome": "maria", "senha": "senha-forte-1"})
+        self.c.post("/api/auth/register", json={"nome": "maria", "email": "maria@exemplo.com", "senha": "senha-forte-1"})
         sid = self.montar(self.c)
         self.assertEqual(self.c.post(f"/api/session/{sid}/save", json={"title": "Minha"}).status_code, 200)
         self.assertEqual([p["title"] for p in self.c.get("/api/playlists").get_json()["playlists"]], ["Minha"])
@@ -136,13 +136,13 @@ class PlaylistsSoComContaTests(unittest.TestCase):
 
     def test_playlist_antiga_do_visitante_vai_para_a_conta_ao_criar(self):
         self.app.store.save_playlist("u_visitante", "antiga", [], ["a", "b"])
-        self.c.post("/api/auth/register", json={"nome": "maria", "senha": "senha-forte-1", "user_id": "u_visitante"})
+        self.c.post("/api/auth/register", json={"nome": "maria", "email": "maria@exemplo.com", "senha": "senha-forte-1", "user_id": "u_visitante"})
         self.assertEqual([p["title"] for p in self.c.get("/api/playlists").get_json()["playlists"]], ["antiga"])
 
     def test_sessao_de_outra_pessoa_nao_salva(self):
         sid = self.montar(self.c)                                    # sessão criada por um visitante
         outro = self.app.test_client()
-        outro.post("/api/auth/register", json={"nome": "joao", "senha": "senha-forte-1"})
+        outro.post("/api/auth/register", json={"nome": "joao", "email": "joao@exemplo.com", "senha": "senha-forte-1"})
         self.assertEqual(outro.post(f"/api/session/{sid}/save", json={"title": "x"}).status_code, 404)
 
 
@@ -162,11 +162,11 @@ class LoginObrigatorioTests(unittest.TestCase):
         self.assertTrue(me["exigir_login"])
 
     def test_com_conta_funciona_e_user_id_anonimo_nao_vale(self):
-        self.c.post("/api/auth/register", json={"nome": "joao", "senha": "senha-forte-1"})
+        self.c.post("/api/auth/register", json={"nome": "joao", "email": "joao@exemplo.com", "senha": "senha-forte-1"})
         self.assertEqual(self.c.post("/api/search", json={"text": "música calma para estudar à noite"}).status_code, 200)
 
     def test_link_publico_de_playlist_continua_aberto(self):
-        self.c.post("/api/auth/register", json={"nome": "joao", "senha": "senha-forte-1"})
+        self.c.post("/api/auth/register", json={"nome": "joao", "email": "joao@exemplo.com", "senha": "senha-forte-1"})
         sid = self.c.post("/api/search", json={"text": "música calma para estudar à noite"}).get_json()
         pid = self.app.store.save_playlist("x", "t", [], [f["id"] for f in sid["resultados"][:2]])
         self.assertEqual(self.app.test_client().get(f"/api/playlists/{pid}").status_code, 200)

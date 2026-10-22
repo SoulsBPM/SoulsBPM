@@ -5,6 +5,7 @@ import logging
 import pathlib
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 # Se o Flask não estiver instalado no sistema, usa a cópia que acompanha o projeto (pasta libs/).
 try:
@@ -17,7 +18,7 @@ from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from soulsbpm import embeddings as embeddings_mod
-from soulsbpm import feedback, musicfinder
+from soulsbpm import emails, feedback, musicfinder
 from soulsbpm.aovivo import provedor_do_ambiente
 from soulsbpm.aprendizado import Aprendizado
 from soulsbpm.contas import COOKIE, SESSAO_DIAS, Contas
@@ -67,7 +68,7 @@ def _inteiro(nome, padrao):
         return padrao
 
 
-def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto=None):
+def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto=None, emailer=None, email_sincrono=False):
     app = Flask(__name__, static_folder=str(RAIZ / "static"), static_url_path="/static")
     proxies = int(os.environ.get("SOULSBPM_PROXY", 0) or 0)       # nº de proxies de confiança na frente (HTTPS da hospedagem)
     if proxies:
@@ -97,6 +98,8 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
     motor = Motor(catalogo, store, provedor=provedor, ia=ia_ativa, embeddings=embeddings, aprendizado=aprendizado,
                   max_artistas_ia=artistas_ia)
     contas = Contas(store)
+    emailer = emailer or emails.do_ambiente(os.environ)                             # recuperação de senha (opcional)
+    envios = ThreadPoolExecutor(max_workers=2)
     app.motor, app.store, app.contas, app.aprendizado = motor, store, contas, aprendizado
     limite_ia = LimiteJanela(_inteiro("SOULSBPM_IA_POR_MIN", 30))                   # explicações por IA, por IP
     exigir_login = os.environ.get("SOULSBPM_EXIGIR_LOGIN", "").lower() in ("1", "true", "sim")   # sem conta, nada funciona
@@ -164,20 +167,61 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
     @app.get("/api/auth/me")
     def auth_me():
         c = conta_logada()
-        return jsonify({"logado": bool(c), "nome": c["nome"] if c else None, "exigir_login": exigir_login})
+        email = contas.email_da_conta(c["id"]) if c else None
+        return jsonify({"logado": bool(c), "nome": c["nome"] if c else None, "exigir_login": exigir_login,
+                        "recuperacao": emailer is not None, "email": contas.mascara_email(email), "tem_email": bool(email)})
 
     @app.post("/api/auth/register")
     def auth_register():
         checa_limite_auth()
         b = corpo()
         anterior = b.get("user_id") if isinstance(b.get("user_id"), str) and ID_VALIDO.match(b["user_id"]) else None
-        return com_sessao(contas.criar(b.get("nome"), b.get("senha"), anterior), 201)    # leva o histórico anônimo para a conta
+        return com_sessao(contas.criar(b.get("nome"), b.get("senha"), anterior, email=b.get("email"), email_obrigatorio=True), 201)
 
     @app.post("/api/auth/login")
     def auth_login():
         checa_limite_auth()
         b = corpo()
-        return com_sessao(contas.entrar(b.get("nome"), b.get("senha")))
+        return com_sessao(contas.entrar(b.get("nome") or b.get("login"), b.get("senha")))
+
+    def base_url():
+        """Endereço do site para montar o link do e-mail. Prefira SOULSBPM_URL: o Host da requisição pode ser forjado."""
+        return (os.environ.get("SOULSBPM_URL") or request.url_root).rstrip("/")
+
+    @app.post("/api/auth/forgot")
+    def auth_forgot():
+        checa_limite_auth()
+        if emailer is None:
+            raise Erro("A recuperação de senha não está configurada neste servidor.", 503)
+        r = contas.pedir_recuperacao(corpo().get("email"))
+        if r:                                                  # mesma resposta com ou sem conta: não revela quem se cadastrou
+            link = f"{base_url()}/redefinir?token={r['token']}"
+            assunto, html_corpo, texto = emails.recuperacao(r["nome"], link)
+
+            def envia():
+                try:
+                    emailer.enviar(r["email"], r["nome"], assunto, html_corpo, texto)
+                except Exception as e:
+                    log.error("Falha ao enviar o e-mail de recuperação: %s", e)
+            envia() if email_sincrono else envios.submit(envia)
+        return jsonify({"ok": True, "mensagem": "Se esse e-mail tiver cadastro, enviamos um link para escolher uma nova senha. Confira também o spam."})
+
+    @app.post("/api/auth/reset")
+    def auth_reset():
+        checa_limite_auth()
+        b = corpo()
+        contas.redefinir(b.get("token"), b.get("senha"))
+        return jsonify({"ok": True})
+
+    @app.post("/api/auth/email")
+    def auth_email():
+        c = conta_logada()
+        if not c:
+            raise Erro("Entre na sua conta primeiro.", 401)
+        checa_limite_auth()
+        b = corpo()
+        email = contas.definir_email(c["id"], b.get("email"), b.get("senha"))
+        return jsonify({"ok": True, "email": contas.mascara_email(email)})
 
     @app.post("/api/auth/logout")
     def auth_logout():
@@ -193,6 +237,7 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
         return send_from_directory(app.static_folder, "index.html")
 
     @app.get("/login")
+    @app.get("/redefinir")
     def pagina_login():
         return send_from_directory(app.static_folder, "login.html")
 

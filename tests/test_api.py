@@ -349,7 +349,7 @@ class ApiTests(unittest.TestCase):
 
     def entrar(self):
         """Playlists só existem em conta: cria e entra numa conta de teste."""
-        self.c.post("/api/auth/register", json={"nome": "tester", "senha": "senha-forte-1"})
+        self.c.post("/api/auth/register", json={"nome": "tester", "email": "tester@exemplo.com", "senha": "senha-forte-1"})
 
     def test_salvar_exige_sequencia_e_gera_link(self):
         self.entrar()

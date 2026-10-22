@@ -44,6 +44,10 @@ document.querySelector('meta[name="theme-color"]').setAttribute("content",t==="c
 <dialog id="dlg-priv">
   <h3>Privacidade e perfil</h3>
   <p class="mudo" id="priv-estado"></p>
+  <div class="info-box" id="priv-conta" hidden>
+    <div id="priv-email-t"></div>
+    <button class="btn btn-sec" id="priv-email-btn" type="button"></button>
+  </div>
   <p class="mudo" id="credito" hidden>BPM e tom das músicas: <a href="https://getsongbpm.com" target="_blank" rel="noopener">GetSongBPM</a></p>
   <div id="priv-perfil" class="info-box"></div>
   <div class="linha col">
@@ -59,6 +63,19 @@ document.querySelector('meta[name="theme-color"]').setAttribute("content",t==="c
     <button class="btn btn-pri" id="conf-no" type="button"></button>
     <button class="btn btn-sec" id="conf-ok" type="button"></button>
   </div>
+</dialog>
+<dialog id="dlg-email">
+  <form id="em-form">
+    <h3>E-mail da conta</h3>
+    <p class="mudo">Usado só para recuperar a sua senha. Confirme com a sua senha atual.</p>
+    <input type="email" id="em-in" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254" placeholder="voce@email.com" aria-label="E-mail">
+    <input type="password" id="em-senha" autocomplete="current-password" maxlength="128" placeholder="Senha atual" aria-label="Senha atual">
+    <div id="em-erro" role="alert"></div>
+    <div class="linha col">
+      <button class="btn btn-pri" type="submit" id="em-ok">Salvar e-mail</button>
+      <button class="btn btn-sec" type="button" id="em-no">Cancelar</button>
+    </div>
+  </form>
 </dialog>
 <dialog id="dlg-nome">
   <form id="nome-form">

@@ -29,6 +29,7 @@ document.querySelector('meta[name="theme-color"]').setAttribute("content",t==="c
       <p>Descreva a vibe e a IA monta o set: BPM dentro de ±5% e tons compatíveis a cada troca.</p>
       <ul>
         <li>Playlists salvas na sua conta</li>
+        <li>Recupere a senha pelo e-mail</li>
         <li>O app aprende o que você curte e pula</li>
         <li>Funciona no celular e no computador</li>
       </ul>
@@ -41,26 +42,41 @@ document.querySelector('meta[name="theme-color"]').setAttribute("content",t==="c
     <section class="lg-card" aria-labelledby="lg-titulo">
       <h1 id="lg-titulo">Entrar</h1>
       <p class="mudo" id="lg-sub"></p>
+      <div id="lg-ok-msg" role="status" aria-live="polite"></div>
 
-      <div class="lg-abas" role="tablist" aria-label="Entrar ou criar conta">
+      <div class="lg-abas" id="lg-abas" role="tablist" aria-label="Entrar ou criar conta">
         <button type="button" role="tab" id="aba-entrar" data-m="entrar" aria-selected="true">Entrar</button>
         <button type="button" role="tab" id="aba-criar" data-m="criar" aria-selected="false">Criar conta</button>
       </div>
 
       <form id="f-login" novalidate>
-        <label for="lg-nome">Usuário</label>
-        <input type="text" id="lg-nome" name="username" autocomplete="username" autocapitalize="none" autocorrect="off"
-               spellcheck="false" inputmode="text" enterkeyhint="next" maxlength="30" required>
-        <label for="lg-senha">Senha</label>
-        <div class="lg-senha">
-          <input type="password" id="lg-senha" name="password" autocomplete="current-password" enterkeyhint="go" maxlength="128" required>
-          <button type="button" id="lg-ver" aria-pressed="false" aria-label="Mostrar a senha">Mostrar</button>
+        <div class="lg-g" id="g-nome">
+          <label for="lg-nome" id="l-nome">Usuário ou e-mail</label>
+          <input type="text" id="lg-nome" name="username" autocomplete="username" autocapitalize="none" autocorrect="off"
+                 spellcheck="false" inputmode="text" enterkeyhint="next" maxlength="254" required>
+          <p class="mudo lg-dica" id="d-nome" hidden>De 3 a 30 caracteres: letras, números, espaço, ponto, hífen ou _.</p>
         </div>
-        <p class="mudo lg-dica" id="lg-dica" hidden>De 8 a 128 caracteres.</p>
+        <div class="lg-g" id="g-email" hidden>
+          <label for="lg-email">E-mail</label>
+          <input type="email" id="lg-email" name="email" autocomplete="email" autocapitalize="none" autocorrect="off"
+                 spellcheck="false" inputmode="email" enterkeyhint="next" maxlength="254" placeholder="voce@email.com">
+          <p class="mudo lg-dica" id="d-email" hidden>Usamos o e-mail só para recuperar a sua senha.</p>
+        </div>
+        <div class="lg-g" id="g-senha">
+          <label for="lg-senha" id="l-senha">Senha</label>
+          <div class="lg-senha">
+            <input type="password" id="lg-senha" name="password" autocomplete="current-password" enterkeyhint="go" maxlength="128" required>
+            <button type="button" id="lg-ver" aria-pressed="false" aria-label="Mostrar a senha">Mostrar</button>
+          </div>
+          <p class="mudo lg-dica" id="lg-dica" hidden>De 8 a 128 caracteres.</p>
+          <div class="lg-forca" id="lg-forca" hidden aria-live="polite"><i></i><i></i><i></i><span id="lg-forca-t"></span></div>
+        </div>
+        <button type="button" class="link-sub lg-esqueci" id="lg-esqueci" hidden>Esqueci minha senha</button>
         <div id="lg-erro" role="alert" aria-live="assertive"></div>
         <button class="btn btn-pri cheio" id="lg-ok" type="submit">Entrar</button>
       </form>
 
+      <button type="button" class="btn btn-sec cheio" id="lg-voltar" hidden>Voltar para entrar</button>
       <div class="lg-ou" id="lg-ou"><span>ou</span></div>
       <button class="btn btn-sec cheio" id="lg-visitante" type="button">Continuar sem conta</button>
       <p class="mudo lg-nota" id="lg-nota"></p>

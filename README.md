@@ -58,6 +58,13 @@ O ranking continua sendo feito pelas regras e pela nota explicável. A IA propõ
 
 **Limites honestos:** os embeddings usam só "título + artista" (não ouvem o áudio nem leem a letra), então o sinal é fraco para faixas obscuras. O app só vê o que ele mesmo sugeriu, então o aprendizado tem viés de seleção; por isso é um ajuste fino sobre o prior manual, não uma troca da fórmula. A IA pode sugerir um artista que existe mas não combina; a checagem garante que ele existe, não que acertou o gosto.
 
+## Contas e recuperação de senha
+
+- O cadastro pede **nome**, **e-mail** e **senha** (8 a 128 caracteres). Dá para entrar com o nome ou com o e-mail.
+- **Esqueci minha senha:** o app envia um link de uso único, válido por 1 hora (guardamos só o hash dele). Ao redefinir, todas as sessões abertas da conta são encerradas. A resposta é a mesma exista ou não conta com o e-mail, e há limite de 3 pedidos por hora por conta.
+- **Contas criadas antes do e-mail** continuam funcionando; em *Privacidade* há **Cadastrar e-mail** (pede a senha atual).
+- A senha é guardada só como hash scrypt. O banco antigo ganha a coluna `email` sozinho ao abrir.
+
 ## Privacidade
 
 - O app guarda só **metadados** (artista, título, BPM, tom). Nenhum áudio.
@@ -67,7 +74,7 @@ O ranking continua sendo feito pelas regras e pela nota explicável. A IA propõ
   vão título, artista, BPM, tom e energia das duas faixas.
 - Para o aprendizado de pesos, o app guarda por gesto 4 números (0 a 1) e o resultado, ligados ao seu código de
   usuário só para poderem ser apagados com o histórico.
-- Não há recuperação de senha: quem esquecer cria outra conta.
+- O **e-mail** serve só para recuperar a senha. Ele só sai do app quando alguém pede a recuperação: aí vão o e-mail e o link ao serviço de envio (Brevo). Sem o serviço configurado, a recuperação fica desligada.
 
 ## Créditos
 
@@ -93,7 +100,7 @@ pip install -r requirements.txt
 #   LASTFM_API_KEY=sua_chave
 #   GETSONGBPM_API_KEY=sua_chave
 python app.py               # http://localhost:5000
-python -m unittest discover -s tests -t .   # 320 testes
+python -m unittest discover -s tests -t .   # 345 testes
 ```
 
 No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e `python3`.
@@ -111,6 +118,9 @@ No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e
 | `SOULSBPM_APRENDER=0` | Desliga o aprendizado dos pesos (volta aos pesos manuais). |
 | `SOULSBPM_IA_POR_MIN` | Limite por IP de explicações por IA (padrão 30 por minuto). |
 | `SOULSBPM_DATA` | Pasta do SQLite e do cache, para disco persistente. |
+| `BREVO_API_KEY`, `EMAIL_REMETENTE`, `EMAIL_REMETENTE_NOME` | Opcional: liga a recuperação de senha por e-mail (Brevo, por API). O remetente precisa estar validado no Brevo. Sem elas, o link "Esqueci minha senha" não aparece. |
+| `SOULSBPM_URL` | Endereço público do site (ex.: `https://seu-app.onrender.com`), usado no link do e-mail de redefinição. Sem ele, usa o endereço da requisição. |
+| `EMAIL_MODO=console` | Só para testes locais: escreve o link de redefinição no terminal em vez de enviar o e-mail. |
 | `SOULSBPM_EXIGIR_LOGIN=1` | Exige conta para tudo (links de playlist continuam abertos). |
 | `SOULSBPM_PROXY=1` | Nº de proxies na frente (HTTPS da hospedagem). |
 | `SOULSBPM_BUSCAS_POR_MIN`, `SOULSBPM_LOGINS_POR_MIN` | Limites por IP (padrão 20 buscas e 10 logins por minuto). |

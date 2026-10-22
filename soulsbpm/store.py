@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS graph(a TEXT, b TEXT, count INTEGER, PRIMARY KEY(a, b
 CREATE TABLE IF NOT EXISTS tracks(id TEXT PRIMARY KEY, data TEXT);
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, nome TEXT UNIQUE COLLATE NOCASE, hash TEXT, created_at REAL);
 CREATE TABLE IF NOT EXISTS auth(token TEXT PRIMARY KEY, user_id TEXT, expires REAL);
+CREATE TABLE IF NOT EXISTS reset(token TEXT PRIMARY KEY, user_id TEXT, expires REAL, created_at REAL);
 CREATE TABLE IF NOT EXISTS transicoes(id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, ts REAL, tipo TEXT,
                                       prev_id TEXT, cand_id TEXT, x_vibe REAL, x_bpm REAL, x_tom REAL,
                                       x_energia REAL, y INTEGER, peso REAL);
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS tracks(id TEXT PRIMARY KEY, data TEXT, seq BIGSERIAL)
 CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, nome TEXT, hash TEXT, created_at DOUBLE PRECISION);
 CREATE UNIQUE INDEX IF NOT EXISTS users_nome_ci ON users(lower(nome));
 CREATE TABLE IF NOT EXISTS auth(token TEXT PRIMARY KEY, user_id TEXT, expires DOUBLE PRECISION);
+CREATE TABLE IF NOT EXISTS reset(token TEXT PRIMARY KEY, user_id TEXT, expires DOUBLE PRECISION, created_at DOUBLE PRECISION);
 CREATE TABLE IF NOT EXISTS transicoes(id BIGSERIAL PRIMARY KEY, user_id TEXT, ts DOUBLE PRECISION, tipo TEXT,
                                       prev_id TEXT, cand_id TEXT, x_vibe DOUBLE PRECISION, x_bpm DOUBLE PRECISION,
                                       x_tom DOUBLE PRECISION, x_energia DOUBLE PRECISION, y INTEGER,
@@ -66,9 +68,15 @@ class Store:
         self._mem = sqlite3.connect(path, check_same_thread=False) if path == ":memory:" else None
         if self._pg:
             self._run_script(SCHEMA_PG)
+            # bancos criados antes do e-mail existir: acrescenta a coluna sem mexer nos dados
+            self._run_script("ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;"
+                             "CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email);")
         else:
             with self._conn() as c:
                 c.executescript(SCHEMA)
+            if "email" not in [r[1] for r in self._run("PRAGMA table_info(users)", fetch=True)]:
+                self._run("ALTER TABLE users ADD COLUMN email TEXT")
+            self._run("CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email)")
 
     def _conn(self):
         return self._mem if self._mem else sqlite3.connect(self.path, timeout=10)

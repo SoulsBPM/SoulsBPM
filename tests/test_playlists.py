@@ -12,7 +12,7 @@ class PlaylistsApi(unittest.TestCase):
     def setUp(self):
         self.app = create_app(":memory:", catalog_path=CATALOGO)
         self.c = self.app.test_client()
-        self.c.post("/api/auth/register", json={"nome": "tester", "senha": "senha-forte-1"})
+        self.c.post("/api/auth/register", json={"nome": "tester", "email": "tester@exemplo.com", "senha": "senha-forte-1"})
         r = self.c.post("/api/search", json={"text": "música calma para estudar à noite"}).get_json()
         self.ids = [f["id"] for f in r["resultados"]]
         self.assertGreaterEqual(len(self.ids), 4)
@@ -22,7 +22,7 @@ class PlaylistsApi(unittest.TestCase):
 
     def outro_usuario(self):
         c = self.app.test_client()
-        c.post("/api/auth/register", json={"nome": "intruso", "senha": "senha-forte-2"})
+        c.post("/api/auth/register", json={"nome": "intruso", "email": "intruso@exemplo.com", "senha": "senha-forte-2"})
         return c
 
     def faixas(self, pid):

@@ -849,8 +849,36 @@ async function abrirPrivacidade() {
     } catch {}
   }
   $("#priv-perfil").innerHTML = html;
+  pintaEmailConta();
   dlg.showModal();
 }
+/* e-mail da conta: contas antigas não têm e dependem dele para recuperar a senha */
+function pintaEmailConta() {
+  $("#priv-conta").hidden = !logado();
+  if (!logado()) return;
+  const tem = !!S.conta.tem_email;
+  $("#priv-email-t").textContent = tem ? `E-mail da conta: ${S.conta.email}` : "Esta conta não tem e-mail. Sem ele você não consegue recuperar a senha.";
+  $("#priv-email-btn").textContent = tem ? "Trocar e-mail" : "Cadastrar e-mail";
+}
+$("#priv-email-btn").onclick = () => {
+  const dlg = $("#dlg-email");
+  $("#em-in").value = ""; $("#em-senha").value = ""; $("#em-erro").replaceChildren();
+  dlg.showModal(); $("#em-in").focus();
+};
+$("#em-no").onclick = () => fechaDlg($("#dlg-email"));
+$("#dlg-email").addEventListener("cancel", e => { e.preventDefault(); fechaDlg($("#dlg-email")); });
+$("#em-form").onsubmit = async e => {
+  e.preventDefault();
+  const ok = $("#em-ok"); ok.disabled = true;
+  try {
+    const r = await api("POST", "/api/auth/email", { email: $("#em-in").value.trim(), senha: $("#em-senha").value });
+    S.conta.email = r.email; S.conta.tem_email = true;
+    fechaDlg($("#dlg-email")); pintaEmailConta(); toast("E-mail salvo");
+  } catch (er) {
+    const d = document.createElement("div"); d.className = "aviso erro"; d.textContent = er.message;
+    $("#em-erro").replaceChildren(d);
+  } finally { ok.disabled = false; }
+};
 $("#priv-fechar").onclick = () => fechaDlg($("#dlg-priv"));
 $("#dlg-priv").addEventListener("cancel", e => { e.preventDefault(); fechaDlg($("#dlg-priv")); });
 $("#dlg-priv").addEventListener("click", e => { if (e.target === e.currentTarget) fechaDlg(e.currentTarget); });
@@ -888,6 +916,7 @@ async function iniciar() {
   if (m) return telaPlaylist(m[1], false);              // link compartilhado abre sem login
   if (!logado() && (S.conta?.exigir_login || guarda.get(K.visitante) !== "1")) { location.replace("/login"); return; }
   if (!logado() && guarda.get(K.consent) === null) $("#consent").hidden = false;
+  if (logado() && !S.conta.tem_email && !S.avisouEmail) { S.avisouEmail = true; setTimeout(() => toast("Sua conta não tem e-mail. Cadastre um em Privacidade para poder recuperar a senha."), 800); }
   telaInicio();
 }
 iniciar();

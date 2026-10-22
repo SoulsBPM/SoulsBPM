@@ -11,7 +11,7 @@ class DestinoDJ(unittest.TestCase):
     def setUp(self):
         self.app = create_app(":memory:", catalog_path=CATALOGO)
         self.c = self.app.test_client()
-        self.c.post("/api/auth/register", json={"nome": "tester", "senha": "senha-forte-1"})
+        self.c.post("/api/auth/register", json={"nome": "tester", "email": "tester@exemplo.com", "senha": "senha-forte-1"})
         r = self.c.post("/api/search", json={"text": "música calma para estudar à noite"}).get_json()
         self.sid = r["session_id"]
         self.d = self.post(f"/api/session/{self.sid}/play", track_id=r["resultados"][0]["id"])
@@ -89,13 +89,13 @@ class DestinoDJ(unittest.TestCase):
 
     def test_destino_de_outra_conta_ou_sem_login_e_recusado(self):
         outro = self.app.test_client()
-        outro.post("/api/auth/register", json={"nome": "intruso", "senha": "senha-forte-2"})
+        outro.post("/api/auth/register", json={"nome": "intruso", "email": "intruso@exemplo.com", "senha": "senha-forte-2"})
         r = outro.post(f"/api/session/{self.sid}/destination", json={"playlist_id": self.pid})
         self.assertEqual(r.status_code, 404)                          # sessão que não é dele
         anonimo = self.app.test_client().post(f"/api/session/{self.sid}/destination", json={"playlist_id": self.pid})
         self.assertEqual(anonimo.status_code, 403)
         c2 = self.app.test_client()
-        c2.post("/api/auth/register", json={"nome": "outro", "senha": "senha-forte-3"})
+        c2.post("/api/auth/register", json={"nome": "outro", "email": "outro@exemplo.com", "senha": "senha-forte-3"})
         sid2 = c2.post("/api/search", json={"text": "música calma para estudar à noite"}).get_json()["session_id"]
         ids = [f["id"] for f in c2.post("/api/search", json={"text": "música calma para estudar à noite"}).get_json()["resultados"]]
         c2.post(f"/api/session/{sid2}/play", json={"track_id": ids[0]})

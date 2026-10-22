@@ -613,3 +613,9 @@ html[data-aovivo] .cred-bpm{display:inline}
 .destino .ic{width:18px;height:18px;flex:none}
 .destino span{flex:1;min-width:180px}
 .destino .link-sub{min-height:36px;padding:4px 8px}
+
+/* e-mail da conta (janela de privacidade) */
+#priv-conta{display:flex;flex-direction:column;gap:10px;margin:10px 0}
+#dlg-email input{margin-top:8px}
+#em-erro:empty{display:none}
+#em-erro{margin-top:8px}
