@@ -26,7 +26,11 @@ def _post_json(url, cabecalhos, corpo, timeout):
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status
     except urllib.error.HTTPError as e:
-        return e.code
+        try:                                              # o Brevo explica o motivo no corpo (ex.: remetente não validado)
+            detalhe = json.loads(e.read().decode("utf-8", "replace")).get("message", "")
+        except Exception:
+            detalhe = ""
+        raise EmailErro(f"o Brevo respondeu HTTP {e.code}" + (f": {str(detalhe)[:200]}" if detalhe else ""))
     except (urllib.error.URLError, TimeoutError) as e:
         raise EmailErro(f"falha de rede: {type(e).__name__}")
 

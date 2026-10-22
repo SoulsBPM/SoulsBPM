@@ -70,7 +70,9 @@ def _inteiro(nome, padrao):
 
 def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto=None, emailer=None, email_sincrono=False):
     app = Flask(__name__, static_folder=str(RAIZ / "static"), static_url_path="/static")
-    proxies = int(os.environ.get("SOULSBPM_PROXY", 0) or 0)       # nº de proxies de confiança na frente (HTTPS da hospedagem)
+    # nº de proxies de confiança na frente (HTTPS da hospedagem). No Render (que define RENDER) vale 1: sem isso o
+    # app enxerga o IP do próprio Render em todo pedido, e o limite de tentativas de login passa a valer para todos juntos.
+    proxies = max(0, _inteiro("SOULSBPM_PROXY", 1 if os.environ.get("RENDER") else 0))
     if proxies:
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=proxies, x_proto=proxies, x_host=proxies)
     dados = pathlib.Path(os.environ.get("SOULSBPM_DATA") or RAIZ / "data")     # pasta do banco e do cache (disco persistente)
@@ -106,7 +108,8 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
     limite_auth = LimiteJanela(int(os.environ.get("SOULSBPM_LOGINS_POR_MIN", 10)))                # contra tentativa de senha
 
     def corpo():
-        return request.get_json(silent=True) or {}
+        b = request.get_json(silent=True)
+        return b if isinstance(b, dict) else {}            # lista, texto ou número no lugar do objeto JSON: trata como vazio
 
     @app.errorhandler(Erro)
     def erro(e):
@@ -124,6 +127,8 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
         r.headers.setdefault("X-Content-Type-Options", "nosniff")
         r.headers.setdefault("X-Frame-Options", "DENY")
         r.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        if request.is_secure:
+            r.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         if request.path.startswith("/api/"):
             r.headers["Cache-Control"] = "no-store"        # respostas pessoais não ficam em cache
             r.headers["X-Souls-Logado"] = "1" if conta_logada() else "0"
@@ -335,7 +340,7 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
         if not p:
             raise Erro("Playlist não encontrada.", 404)
         p.pop("user_id", None)           # link público não expõe o dono
-        p["faixas"] = [motor.por_id[i] for i in p["track_ids"]]
+        p["faixas"] = [motor.por_id[i] for i in p["track_ids"] if i in motor.por_id]     # faixa que sumiu do catálogo não derruba a página
         return jsonify(p)
 
     def dono():

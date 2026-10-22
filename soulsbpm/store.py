@@ -65,7 +65,7 @@ class Store:
         self._lock = threading.Lock()
         self._pg = eh_postgres(path)
         self._pgconn = None
-        self._mem = sqlite3.connect(path, check_same_thread=False) if path == ":memory:" else None
+        self._mem = self._abre(path, check_same_thread=False) if path == ":memory:" else None
         if self._pg:
             self._run_script(SCHEMA_PG)
             # bancos criados antes do e-mail existir: acrescenta a coluna sem mexer nos dados
@@ -78,8 +78,15 @@ class Store:
                 self._run("ALTER TABLE users ADD COLUMN email TEXT")
             self._run("CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email)")
 
+    @staticmethod
+    def _abre(caminho, **opcoes):
+        c = sqlite3.connect(caminho, **opcoes)
+        # o lower() do SQLite só entende ASCII ("JOÃO" não vira "joão"); o do PostgreSQL entende tudo. Igualamos os dois.
+        c.create_function("lower", 1, lambda t: t.lower() if isinstance(t, str) else t, deterministic=True)
+        return c
+
     def _conn(self):
-        return self._mem if self._mem else sqlite3.connect(self.path, timeout=10)
+        return self._mem if self._mem else self._abre(self.path, timeout=10)
 
     # PostgreSQL: uma conexão reaproveitada (abrir uma a cada consulta é lento) e refeita se o banco
     # tiver dormido ou derrubado a conexão (o Neon suspende o banco quando fica parado).
@@ -245,6 +252,9 @@ class Store:
     def get_playlist(self, pid):
         rows = self._run("SELECT * FROM playlists WHERE id=?", (pid,), fetch=True)
         return self._pl(rows[0]) if rows else None
+
+    def count_playlists(self, uid):
+        return self._run("SELECT COUNT(*) FROM playlists WHERE user_id=?", (uid,), fetch=True)[0][0]
 
     def list_playlists(self, uid):
         rows = self._run("SELECT * FROM playlists WHERE user_id=? ORDER BY created_at DESC", (uid,), fetch=True)

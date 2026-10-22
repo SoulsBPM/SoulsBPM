@@ -100,7 +100,7 @@ pip install -r requirements.txt
 #   LASTFM_API_KEY=sua_chave
 #   GETSONGBPM_API_KEY=sua_chave
 python app.py               # http://localhost:5000
-python -m unittest discover -s tests -t .   # 345 testes
+python -m unittest discover -s tests -t .   # 361 testes
 ```
 
 No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e `python3`.
@@ -122,7 +122,7 @@ No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e
 | `SOULSBPM_URL` | Endereço público do site (ex.: `https://seu-app.onrender.com`), usado no link do e-mail de redefinição. Sem ele, usa o endereço da requisição. |
 | `EMAIL_MODO=console` | Só para testes locais: escreve o link de redefinição no terminal em vez de enviar o e-mail. |
 | `SOULSBPM_EXIGIR_LOGIN=1` | Exige conta para tudo (links de playlist continuam abertos). |
-| `SOULSBPM_PROXY=1` | Nº de proxies na frente (HTTPS da hospedagem). |
+| `SOULSBPM_PROXY=1` | Nº de proxies na frente (HTTPS da hospedagem). No Render já vale 1 sozinho; `0` desliga. Sem isso o limite de tentativas de login seria compartilhado por todos. |
 | `SOULSBPM_BUSCAS_POR_MIN`, `SOULSBPM_LOGINS_POR_MIN` | Limites por IP (padrão 20 buscas e 10 logins por minuto). |
 | `PORT`, `HOST` | Porta (padrão 5000) e interface (padrão `127.0.0.1`). |
 

@@ -107,7 +107,7 @@ class Motor:
                 self.sessoes.pop(k, None)
 
     def faixa(self, tid):
-        f = self.por_id.get(tid)
+        f = self.por_id.get(tid) if isinstance(tid, str) else None
         if not f:
             raise Erro("Faixa não encontrada.", 404)
         return f
@@ -561,9 +561,13 @@ class Motor:
         s = self.sessao(sid)
         if len(s.sequencia) < 2:
             raise Erro("Aceite pelo menos uma sugestão antes de salvar a sequência.")
+        if titulo is not None and not isinstance(titulo, str):
+            raise Erro("O nome da playlist deve ser um texto.")
+        if self.store.count_playlists(s.user_id) >= MAX_PLAYLISTS:
+            raise Erro(f"Você chegou ao limite de {MAX_PLAYLISTS} playlists. Exclua alguma para salvar outra.")
+        titulo = self._titulo_playlist((titulo or "").strip() or s.consulta.capitalize()[:MAX_TITULO_PLAYLIST])
+        tags = self._tags_playlist(tags) if tags else list(s.interp["tags"])[:4]
         s.estado = SALVANDO
-        titulo = (titulo or "").strip() or s.consulta.capitalize()
-        tags = tags if tags else list(s.interp["tags"])[:4]
         perfil = self.perfil(s.user_id)
         for a, b in zip(s.sequencia, s.sequencia[1:]):
             feedback.registrar_positivo(perfil, "save", self.por_id[b], self.por_id[a])
@@ -616,7 +620,7 @@ class Motor:
         titulo = self._titulo_playlist(titulo)
         tags = self._tags_playlist(tags or [])
         ids = self._faixas_playlist(track_ids or [])
-        if len(self.store.list_playlists(user_id)) >= MAX_PLAYLISTS:
+        if self.store.count_playlists(user_id) >= MAX_PLAYLISTS:
             raise Erro(f"Você chegou ao limite de {MAX_PLAYLISTS} playlists. Exclua alguma para criar outra.")
         pid = self.store.save_playlist(user_id, titulo, tags, ids, grafo=False)
         return {"id": pid, "title": titulo, "tags": tags, "faixas": len(ids), "link": f"/p/{pid}"}
@@ -637,7 +641,7 @@ class Motor:
 
     def adicionar_faixa_playlist(self, user_id, pid, track_id):
         pl = self._playlist_do_dono(user_id, pid)
-        if track_id not in self.por_id:
+        if not isinstance(track_id, str) or track_id not in self.por_id:
             raise Erro("Faixa não encontrada.", 404)
         if track_id in pl["track_ids"]:
             return {"id": pid, "title": pl["title"], "faixas": len(pl["track_ids"]), "ja_estava": True}
@@ -657,13 +661,15 @@ class Motor:
             raise Erro("Playlist não encontrada.", 404)
         if not pl["track_ids"]:
             raise Erro("A playlist está vazia. Adicione faixas antes de continuar no Modo DJ.")
-        faixas = [self.por_id[i] for i in pl["track_ids"]]
+        faixas = [self.por_id[i] for i in pl["track_ids"] if i in self.por_id]
+        if not faixas:
+            raise Erro("As faixas desta playlist não estão mais disponíveis. Adicione outras para continuar no Modo DJ.")
         energia = round(sum(f["energia"] for f in faixas) / len(faixas), 2)
         interp = {"clara": True, "tags": {t: 1 for t in pl["tags"]}, "energia": energia, "generos": [],
                   "tecnico": False, "termos": [], "resumo": f"Continuando “{pl['title']}”", "exemplos": []}
         self._limpar_sessoes()
         s = Sessao(user_id, pl["title"], interp)
-        s.sequencia = list(pl["track_ids"])
+        s.sequencia = [f["id"] for f in faixas]
         s.destino = pid                                       # o que for aceito daqui em diante entra nesta playlist
         self.sessoes[s.id] = s
         self._sugerir(s)

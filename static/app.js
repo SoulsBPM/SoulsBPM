@@ -611,16 +611,19 @@ async function novaPlaylist(sugestao = "", ids = [], tags = []) {
   return api("POST", "/api/playlists", { title: nome, track_ids: ids, tags });
 }
 /* janela com as playlists da pessoa; devolve a escolhida (ou a recém-criada) */
+let _escolhendo = false;
 async function escolhePlaylist(texto) {
+  if (_escolhendo) return null;                                   // clique duplo: não abre a janela duas vezes
+  _escolhendo = true;
   let lista;
-  try { ({ playlists: lista } = await api("GET", "/api/playlists")); } catch (e) { toast(e.message); return null; }
+  try { ({ playlists: lista } = await api("GET", "/api/playlists")); } catch (e) { _escolhendo = false; toast(e.message); return null; }
   return new Promise(res => {
     const dlg = $("#dlg-pl"), box = $("#pl-lista");
     $("#pl-txt").textContent = texto;
     box.innerHTML = lista.length
       ? lista.map(p => `<button class="btn btn-sec" type="button" data-pl="${esc(p.id)}">${esc(p.title)} <span class="mudo">· ${p.faixas}</span></button>`).join("")
       : `<p class="mudo">Você ainda não tem playlists. Crie a primeira.</p>`;
-    const fim = v => { fechaDlg(dlg); res(v); };
+    const fim = v => { _escolhendo = false; fechaDlg(dlg); res(v); };
     box.querySelectorAll("[data-pl]").forEach(b => b.onclick = () => fim(lista.find(p => p.id === b.dataset.pl)));
     $("#pl-fechar").onclick = () => fim(null);
     $("#pl-nova").onclick = async () => {
@@ -882,8 +885,8 @@ $("#em-form").onsubmit = async e => {
 $("#priv-fechar").onclick = () => fechaDlg($("#dlg-priv"));
 $("#dlg-priv").addEventListener("cancel", e => { e.preventDefault(); fechaDlg($("#dlg-priv")); });
 $("#dlg-priv").addEventListener("click", e => { if (e.target === e.currentTarget) fechaDlg(e.currentTarget); });
-$("#priv-zerar").onclick = async () => { await api("DELETE", "/api/profile"); abrirPrivacidade(); };
-$("#priv-apagar").onclick = async () => { await api("DELETE", "/api/history"); abrirPrivacidade(); if (!S.sid) telaInicio(); };
+$("#priv-zerar").onclick = async () => { try { await api("DELETE", "/api/profile"); abrirPrivacidade(); } catch (e) { toast(e.message); } };
+$("#priv-apagar").onclick = async () => { try { await api("DELETE", "/api/history"); abrirPrivacidade(); if (!S.sid) telaInicio(); } catch (e) { toast(e.message); } };
 $("#tab-buscar").onclick = async () => { if (!(await saidaOk())) return; pararReproducao(); irInicio(); };
 $("#tab-playlists").onclick = async () => { if (!(await saidaOk())) return; if (location.pathname !== "/") history.pushState(null, "", "/"); telaPlaylists(); };
 $("#tab-priv").onclick = abrirPrivacidade;

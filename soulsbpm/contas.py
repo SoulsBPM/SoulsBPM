@@ -65,12 +65,14 @@ class Contas:
         uid = id_existente if id_existente and not self.eh_conta(id_existente) else "u_" + secrets.token_hex(16)
         if email and self.store._run("SELECT 1 FROM users WHERE email=?", (email,), fetch=True):
             raise Erro("Esse e-mail já tem cadastro. Entre na sua conta ou recupere a senha.", 409)
+        if self.store._run("SELECT 1 FROM users WHERE lower(nome)=lower(?)", (nome,), fetch=True):     # "João" e "JOÃO" são o mesmo nome
+            raise Erro("Esse nome já está em uso. Escolha outro ou entre na sua conta.", 409)
         try:
             self.store._run("INSERT INTO users(id,nome,hash,created_at,email) VALUES(?,?,?,?,?)",
                             (uid, nome, self._novo_hash(senha), self.agora(), email))
         except Exception as e:                         # UNIQUE(nome) ou UNIQUE(email) já existe
             if "UNIQUE" in str(e).upper() or "DUPLICATE" in str(e).upper():
-                if email and "email" in str(e).lower():
+                if email and ("users.email" in str(e).lower() or "users_email" in str(e).lower()):
                     raise Erro("Esse e-mail já tem cadastro. Entre na sua conta ou recupere a senha.", 409)
                 raise Erro("Esse nome já está em uso. Escolha outro ou entre na sua conta.", 409)
             raise
