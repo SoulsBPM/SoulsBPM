@@ -8,6 +8,7 @@ const guarda = {
   del: k => { try { localStorage.removeItem(k); } catch {} },
 };
 const S = { clicado: null, ocupado: false, sid: null, dj: null, busca: "", tocando: null, res: null, origem: null, salvo: false, redesenha: null, conta: { logado: false },
+  salvas: {},                                              // faixa → playlist onde foi salva nesta visita
   modo: (v => v === "dj" || v === "comum" ? v : null)(guarda.get(K.modo)) };   // "dj" = telas técnicas, "comum" = telas simples
 
 /* botão clicado (captura antes dos handlers) e indicador de carregamento: o spinner só aparece se a resposta
@@ -372,7 +373,7 @@ async function telaInicio(msg, exemplos) {
 
 async function buscar(texto) {
   if (!texto.trim()) { $("#vibe")?.focus(); return; }
-  S.busca = texto;
+  S.busca = texto; S.salvas = {};
   abas(null);                                                       // estado Buscando
   app.innerHTML = `<div class="centro-tela"><div class="logo">${LOGO} SoulsBPM</div>
     <div class="indet"><i></i></div><div class="mudo">Interpretando a vibe…</div></div>`;
@@ -498,6 +499,7 @@ function telaDJ(d, aviso) {
           <div class="deck-id">${capa(a)}<div class="tx"><div class="tit">${esc(a.titulo)}</div><div class="art">${esc(a.artista)}</div>${ouvir(a)}</div></div>
           <div class="stats so-tec"><div class="stat"><span class="bpm-v">${a.bpm}</span><span class="u">BPM</span></div>${chave(a.tom, true)}
             <span class="en-l">${energia(a.energia)} ${e10(a.energia)}</span></div>
+          <div class="salva-linha">${botaoSalvarFaixa(d, a)}</div>
           <p class="mudo nota-ouvir">Ouça no Spotify ou no YouTube e volte aqui para salvar na playlist ou pular.</p>
         </div>
       </section>
@@ -505,7 +507,7 @@ function telaDJ(d, aviso) {
         <div class="ph">${ic("sparkle")} Próxima sugerida pela IA</div>
         <div class="pb">${p ? `
           <div class="ia-topo">${capa(p)}<div class="tx" style="flex:1;min-width:0"><div class="tit" style="font-size:22px;font-weight:700">${esc(p.titulo)}</div><div class="art">${esc(p.artista)}</div>${ouvir(p)}</div>${anel(p)}</div>
-          <span class="selo ${p.classe}">${rotulo[p.classe]}</span>
+          <span class="selo ${p.classe}">${rotulo[p.classe]}</span>${seloSalva(d, p)}
           <div class="stats so-tec"><div class="stat"><span class="bpm-v">${p.bpm}</span><span class="u">BPM</span></div><span class="delta">${pct(a.bpm, p.bpm)}</span>${chave(p.tom, true)}
             <span class="en-l">${energia(p.energia)} ${e10(p.energia)}</span></div>
           ${p.motivos?.length ? `<div class="motivos so-tec"><div><div class="t">Por que a IA sugeriu</div><ul>${p.motivos.map(m => `<li>${esc(m)}</li>`).join("")}</ul></div>${roda(a.tom, p.tom)}</div>` : ""}
@@ -566,6 +568,7 @@ function telaDJ(d, aviso) {
   $("#b-bpm-menos").onclick = () => chama("bpm", { delta: -5 });
   $("#b-bpm-auto")?.addEventListener("click", () => chama("bpm", { auto: true }));
   $("#b-trocar")?.addEventListener("click", () => chama("skip", { target: "sugestao" }));
+  ligaSalvarFaixa(d, () => telaDJ(d, aviso));
   $("#b-explicar")?.addEventListener("click", async () => {     // a IA (ou, sem IA, as regras) explica a transição
     const b = $("#b-explicar"), box = $("#narra");
     b.disabled = true; box.hidden = false; box.className = "narra"; box.textContent = "Pensando…";
@@ -691,6 +694,7 @@ function telaPlayerComum(d, aviso) {
       <section class="painel cm-agora">
         <div class="cm-rotulo">Tocando agora</div>
         <div class="cm-capa">${capa(a, "g")}<div class="tx"><div class="tit">${esc(a.titulo)}</div><div class="art">${esc(a.artista)}</div>${ouvir(a)}</div></div>
+        <div class="salva-linha">${botaoSalvarFaixa(d, a)}</div>
         <p class="mudo nota-ouvir">Ouça no Spotify ou no YouTube e volte aqui para escolher a próxima.</p>
       </section>
       <section class="painel cm-prox">
@@ -700,7 +704,8 @@ function telaPlayerComum(d, aviso) {
           <p class="narra" id="narra" aria-live="polite" hidden></p>
           <div class="cm-botoes"><button class="btn btn-pri" id="b-aceitar" type="button">${ic("check")} Quero esta</button>
             <button class="btn btn-sec" id="b-trocar" type="button">${ic("swap")} Outra sugestão</button>
-            <button class="btn btn-sec" id="b-explicar" type="button">${ic("sparkle")} Por que esta?</button></div>`
+            <button class="btn btn-sec" id="b-explicar" type="button">${ic("sparkle")} Por que esta?</button></div>
+          <div class="salva-linha">${botaoSalvarFaixa(d, p)}</div>`
           : `<div class="aviso">Acabaram as sugestões para este momento. Salve a playlist ou faça uma nova busca.</div>`}
       </section>
     </div>
@@ -722,6 +727,7 @@ function telaPlayerComum(d, aviso) {
   ligaVoltar(sairDoDJ);
   $("#b-aceitar")?.addEventListener("click", () => chama("accept"));
   $("#b-trocar")?.addEventListener("click", () => chama("skip", { target: "sugestao" }));
+  ligaSalvarFaixa(d, () => telaPlayerComum(d, aviso));
   $("#b-explicar")?.addEventListener("click", async () => {
     const b = $("#b-explicar"), box = $("#narra");
     b.disabled = true; box.hidden = false; box.className = "narra"; box.textContent = "Pensando…";
@@ -744,6 +750,30 @@ function telaPlayerComum(d, aviso) {
   app.querySelectorAll("[data-aj]").forEach(b => b.onclick = () => chama("adjust", { direction: b.dataset.aj }));
   $("#b-vibe")?.addEventListener("click", () => { pararReproducao(); telaInicio(); });
   if (!quieto) paraTop();
+}
+
+/* ---------- Salvar uma faixa na playlist, direto do cartão dela ---------- */
+/* nome da playlist em que a faixa já está (a de destino do set ou uma escolhida antes), ou null */
+const jaSalva = (d, id) => (d.destino?.ids?.includes(id) ? d.destino.title : null) || S.salvas[id] || null;
+const botaoSalvarFaixa = (d, f) => {
+  const t = jaSalva(d, f.id);
+  return t ? `<button class="btn btn-sec pequeno ok salva-ok" type="button" disabled>${ic("check")} Música já salva em “${esc(t)}”</button>`
+           : `<button class="btn btn-sec pequeno" type="button" data-salva="${esc(f.id)}">${ic("save")} Salvar na playlist</button>`;
+};
+const seloSalva = (d, f) => { const t = jaSalva(d, f.id); return t ? `<span class="tag-salva">${ic("check")} Já salva em “${esc(t)}”</span>` : ""; };
+/* liga os botões [data-salva] da tela; `redesenha` pinta a tela de novo já com o aviso "já salva" */
+function ligaSalvarFaixa(d, redesenha) {
+  app.querySelectorAll("[data-salva]").forEach(b => b.onclick = async () => {
+    const f = [d.atual, d.sugerida].find(x => x && x.id === b.dataset.salva);
+    if (!f) return;
+    if (!logado()) return pedeContaPlaylist();
+    const pl = await escolhePlaylist(`${f.titulo}, ${f.artista}`);
+    if (!pl) return;
+    try {
+      await api("POST", `/api/playlists/${pl.id}/tracks`, { track_id: f.id });
+      S.salvas[f.id] = pl.title; toast(`Salva em “${pl.title}”`); redesenha();
+    } catch (e) { toast(e.message); }
+  });
 }
 
 /* ---------- Gerenciar playlists: pedir nome, escolher playlist, adicionar faixa ---------- */

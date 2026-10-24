@@ -38,6 +38,13 @@ class DestinoDJ(unittest.TestCase):
         self.assertEqual(self.faixas(), self.sequencia(d))
         self.assertEqual(d["destino"]["faixas"], 2)
 
+    def test_destino_informa_quais_faixas_ja_estao_salvas(self):
+        d = self.destino(self.pid)
+        self.assertEqual(d["destino"]["ids"], self.sequencia(d))
+        d = self.post(f"/api/session/{self.sid}/accept")
+        self.assertEqual(d["destino"]["ids"], self.sequencia(d))
+        self.assertNotIn(d["sugerida"]["id"], d["destino"]["ids"])
+
     def test_desfazer_aceite_tira_a_faixa_da_playlist(self):
         self.destino(self.pid)
         self.post(f"/api/session/{self.sid}/accept")

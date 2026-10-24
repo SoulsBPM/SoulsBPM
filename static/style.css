@@ -674,3 +674,10 @@ body.modo-comum .hero p{font-size:19px}
 .cm-barra{position:sticky;bottom:0;z-index:5;margin-top:auto;display:flex;flex-wrap:wrap;gap:10px;padding:14px 0 calc(14px + env(safe-area-inset-bottom));
   background:linear-gradient(to top,var(--noite) 72%,var(--noite-t))}
 .cm-barra .btn{flex:1 1 140px;min-height:52px}
+
+/* salvar a faixa direto do cartão dela */
+.salva-linha{margin-top:12px}
+.btn.salva-ok:disabled{opacity:1;filter:none;cursor:default;color:var(--ok);border-color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,var(--painel))}
+.tag-salva{display:inline-flex;align-items:center;gap:5px;margin:12px 0 0 10px;font-size:14px;font-weight:600;color:var(--ok)}
+.tag-salva .ic{width:15px;height:15px}
+.cm-prox .salva-linha{margin-top:0}

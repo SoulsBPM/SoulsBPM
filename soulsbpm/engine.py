@@ -196,7 +196,7 @@ class Motor:
         pl = self.store.get_playlist(s.destino)
         if not pl:
             return None
-        return {"id": pl["id"], "title": pl["title"], "faixas": len(pl["track_ids"])}
+        return {"id": pl["id"], "title": pl["title"], "faixas": len(pl["track_ids"]), "ids": list(pl["track_ids"])}
 
     @staticmethod
     def _pega_aviso(s):
