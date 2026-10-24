@@ -714,7 +714,6 @@ function telaPlayerComum(d, aviso) {
       <ol>${d.sequencia.map(f => `<li><strong>${esc(f.titulo)}</strong> <span class="mudo">${esc(f.artista)}</span></li>`).join("")}</ol></details>
     <div class="cm-barra">
       <button class="btn btn-sec" id="b-faixa-ant" type="button" ${d.pode_voltar ? "" : "disabled"}>${ic("prev")} Voltar</button>
-      <button class="btn btn-sec" id="b-pular" type="button">${ic("skip")} Pular música escolhida</button>
       ${d.destino ? "" : `<button class="btn btn-sec" id="b-salvar" type="button" ${d.sequencia.length < 2 ? "disabled title='Escolha uma música a seguir primeiro'" : ""}>${ic("save")} Salvar toda a sequência</button>`}
     </div>`;
   S.redesenha = null;
@@ -726,7 +725,6 @@ function telaPlayerComum(d, aviso) {
   $("#b-trocar")?.addEventListener("click", () => chama("skip", { target: "sugestao" }));
   ligaSalvarFaixa(d, () => telaPlayerComum(d, aviso));
   $("#b-faixa-ant").onclick = () => chama("back");
-  $("#b-pular").onclick = () => chama("skip", { target: "atual", elapsed_fraction: fracao() });
   $("#b-curtir").onclick = async () => {
     try {
       const on = (await api("POST", `/api/session/${S.sid}/like`)).curtida, b = $("#b-curtir");
