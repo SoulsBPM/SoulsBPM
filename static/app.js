@@ -609,7 +609,7 @@ function telaModo() {
   const cartao = (id, icone, titulo, texto, itens, cta) => `<button class="modo-card ${id}" data-modo="${id}" type="button" ${S.modo === id ? 'aria-current="true"' : ""}>
       ${ic(icone)}<h2>${titulo}</h2><p>${texto}</p><ul>${itens.map(i => `<li>${i}</li>`).join("")}</ul>
       <span class="modo-ir">${cta} ${ic("chev")}</span></button>`;
-  app.innerHTML = `<div class="modo-esc">
+  app.innerHTML = (S.modo ? topbar("Voltar") : "") + `<div class="modo-esc">
     <div class="hero"><h1>Como você quer usar o <span class="vibe">SoulsBPM</span>?</h1>
       <p>Escolha o jeito que combina com você. Dá para trocar quando quiser, no menu.</p></div>
     <div class="modo-cards">
@@ -618,6 +618,7 @@ function telaModo() {
       ${cartao("comum", "heart", "Para ouvir sem complicação", "Conte o momento e receba músicas que combinam, sem termos técnicos.",
                ["Escolha pelo clima: relaxar, treinar, festa…", "Uma música de cada vez, fácil de pular ou curtir", "Salve suas playlists com um toque"], "Entrar para ouvir")}
     </div></div>`;
+  if (S.modo) ligaVoltar(irInicio);
   app.querySelectorAll("[data-modo]").forEach(b => b.onclick = () => {
     S.modo = b.dataset.modo; guarda.set(K.modo, S.modo); aplicaModo(); S.busca = ""; irInicio();
   });
@@ -894,7 +895,7 @@ function telaSalvar(d) {
 function telaSalva(r) {
   abas("playlists", true); S.salvo = true;
   const url = location.host + r.link;
-  app.innerHTML = `
+  app.innerHTML = topbar("Modo DJ") + `
     <div class="circ ok">${ic("check")}</div><h2 class="titulo-p">Sequência guardada</h2>
     <div class="card-pl" style="max-width:460px"><div class="tit">${esc(r.titulo)}</div>
       <div class="art">${r.faixas ?? S.dj.sequencia.length} faixas · ${r.tags.map(esc).join(", ")}</div></div>
@@ -908,6 +909,7 @@ function telaSalva(r) {
     try { await navigator.clipboard.writeText(full); } catch { const t = document.createElement("textarea"); t.value = full; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
     $("#copiar").innerHTML = `${ic("check")} Link copiado`;
   };
+  ligaVoltar(() => telaDJ(S.dj));
   $("#dj").onclick = () => telaDJ(S.dj);
   $("#abrir").onclick = telaPlaylists;
   $("#nova").onclick = () => { S.busca = ""; telaInicio(); };
@@ -924,29 +926,31 @@ async function pedeConta() {
 async function telaPlaylists() {
   pararReproducao(); abas("playlists");
   if (!logado()) {
-    app.innerHTML = `<h1 class="titulo-p">Playlists</h1>
+    app.innerHTML = topbar("Início") + `<h1 class="titulo-p">Playlists</h1>
       <div class="vazio">As playlists ficam guardadas na sua conta. Crie uma conta grátis (ou entre) para salvar as sequências que você montar e vê-las em qualquer aparelho.</div>
       <div class="fim"><button class="btn btn-pri cheio" id="ir-login">${ic("user")} Entrar ou criar conta</button>
       <button class="btn btn-sec cheio" id="nova">${ic("plus")} Nova busca</button></div>`;
+    ligaVoltar(irInicio);
     $("#ir-login").onclick = () => location.assign("/login");
     $("#nova").onclick = () => { S.busca = ""; telaInicio(); };
     return;
   }
-  app.innerHTML = `<h1 class="titulo-p">Playlists</h1><p class="mudo">Carregando…</p>`;
+  app.innerHTML = topbar("Início") + `<h1 class="titulo-p">Playlists</h1><p class="mudo">Carregando…</p>`; ligaVoltar(irInicio);
   try {
     const { playlists } = await api("GET", "/api/playlists");
-    app.innerHTML = `<h1 class="titulo-p">Playlists</h1>` + (playlists.length
+    app.innerHTML = topbar("Início") + `<h1 class="titulo-p">Playlists</h1>` + (playlists.length
       ? `<section class="painel lista">${playlists.map(p => `<button class="item clic" data-pl="${p.id}"><div class="capa p" style="--k:#7a66ff;--a:${90 + semente(p.id) % 180}deg">${ic("list")}</div><div class="tx">
           <div class="tit">${esc(p.title)}</div><div class="art">${p.faixas} faixas</div><div class="tags-i">${p.tags.map(esc).join(", ")}</div></div>${ic("chev", "ic seta")}</button>`).join("")}</section>`
       : `<div class="vazio">${userId() || logado() ? "Nenhuma playlist ainda. Crie uma agora, ou faça uma busca e salve os resultados ou uma sequência do Modo DJ." : "Você não permitiu que eu lembre, então nada é guardado."}</div>`)
       + `<div class="fim"><button class="btn btn-pri cheio" id="nova-pl">${ic("plus")} Nova playlist</button>
          <button class="btn btn-sec cheio" id="nova">${ic("search")} Nova busca</button></div>`;
+    ligaVoltar(irInicio);
     app.querySelectorAll("[data-pl]").forEach(b => b.onclick = () => telaPlaylist(b.dataset.pl, true));
     $("#nova").onclick = () => { S.busca = ""; telaInicio(); };
     $("#nova-pl").onclick = async () => {
       try { const pl = await novaPlaylist(); if (pl) telaPlaylist(pl.id, true); } catch (e) { toast(e.message); }
     };
-  } catch (e) { app.innerHTML = erroHtml(e.message); }
+  } catch (e) { app.innerHTML = topbar("Início") + erroHtml(e.message); ligaVoltar(irInicio); }
 }
 async function telaPlaylist(pid, minha, manterScroll = false) {
   const y = window.scrollY;
