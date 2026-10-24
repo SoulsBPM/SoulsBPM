@@ -18,6 +18,15 @@ uma faixa leva à outra de forma natural, como um DJ faria, e aprende com o que 
 - **Visão simples ou técnica.** O interruptor “Técnico” mostra BPM, tom e energia, além do gráfico da trajetória do set.
 - **Privacidade.** Dá para ver o que o app aprendeu sobre você, zerar o perfil e apagar o histórico.
 
+## Dois modos de uso
+
+Ao entrar pela primeira vez o app pergunta como você quer usá-lo (dá para trocar a qualquer momento em **Modo** no menu; a escolha fica guardada neste navegador):
+
+- **Para DJs.** As telas técnicas: BPM, chave Camelot, energia, trajetória do set, BPM alvo e os motivos de cada troca.
+- **Para ouvir sem complicação.** Telas próprias e mais leves: escolha pelo clima (relaxar, treinar, festa…), cartões de música, uma sugestão de cada vez ("Quero esta", "Outra sugestão", "Por que esta?"), sem números nem termos técnicos. A explicação "Por que esta?" também sai em linguagem simples.
+
+Os dois modos usam a mesma conta, as mesmas playlists e o mesmo motor de sugestão.
+
 ## Como usar
 
 1. Abra o link e, se quiser salvar playlists, crie uma conta em *Entrar / Criar conta* (ou escolha *Continuar sem conta*).
@@ -100,7 +109,7 @@ pip install -r requirements.txt
 #   LASTFM_API_KEY=sua_chave
 #   GETSONGBPM_API_KEY=sua_chave
 python app.py               # http://localhost:5000
-python -m unittest discover -s tests -t .   # 361 testes
+python -m unittest discover -s tests -t .   # 368 testes
 ```
 
 No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e `python3`.

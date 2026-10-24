@@ -1,13 +1,14 @@
 /* SoulsBPM – console de DJ (interface). Cada tela corresponde a um estado do documento 4. */
 const $ = (s, r = document) => r.querySelector(s);
 const app = $("#app");
-const K = { uid: "souls_uid", consent: "souls_consent", tec: "souls_tec", tema: "souls_tema", menu: "souls_menu", visitante: "souls_visitante" };
+const K = { uid: "souls_uid", consent: "souls_consent", tec: "souls_tec", tema: "souls_tema", menu: "souls_menu", visitante: "souls_visitante", modo: "souls_modo" };
 const guarda = {
   get: k => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
   del: k => { try { localStorage.removeItem(k); } catch {} },
 };
-const S = { clicado: null, ocupado: false, sid: null, dj: null, busca: "", tocando: null, res: null, origem: null, salvo: false, redesenha: null, conta: { logado: false } };
+const S = { clicado: null, ocupado: false, sid: null, dj: null, busca: "", tocando: null, res: null, origem: null, salvo: false, redesenha: null, conta: { logado: false },
+  modo: (v => v === "dj" || v === "comum" ? v : null)(guarda.get(K.modo)) };   // "dj" = telas técnicas, "comum" = telas simples
 
 /* botão clicado (captura antes dos handlers) e indicador de carregamento: o spinner só aparece se a resposta
    demorar (>150 ms), para não piscar; cliques repetidos são ignorados enquanto a ação roda */
@@ -61,6 +62,7 @@ $("#side-logo").innerHTML = LOGO + '<span class="tab-t"> SoulsBPM</span>';
 
 /* ---------- utilidades ---------- */
 const logado = () => !!S.conta?.logado;
+const modoComum = () => S.modo === "comum";
 function userId() {
   if (logado()) return null;                                  // com login, o servidor sabe quem é pelo cookie
   if (guarda.get(K.consent) !== "sim") return null;           // sem consentimento nada é guardado
@@ -156,8 +158,9 @@ function confirma(titulo, texto, rotuloOk, rotuloNao) {
 async function saidaOk() {
   const d = S.dj;
   if (!(d && d.sequencia.length >= 2 && !S.salvo)) return true;
-  return confirma("Sair do Modo DJ?", "A sequência que você montou ainda não foi salva e vai se perder.",
-                  "Sair sem salvar", "Continuar no Modo DJ");
+  return modoComum()
+    ? confirma("Sair da sequência?", "As músicas que você escolheu ainda não foram salvas em uma playlist e vão se perder.", "Sair sem salvar", "Continuar ouvindo")
+    : confirma("Sair do Modo DJ?", "A sequência que você montou ainda não foi salva e vai se perder.", "Sair sem salvar", "Continuar no Modo DJ");
 }
 
 
@@ -343,6 +346,7 @@ async function telaInicio(msg, exemplos) {
   pararReproducao(); abas("buscar"); S.sid = null; S.dj = null; S.res = null; S.salvo = false;
   let recentes = [];
   try { recentes = (await api("GET", "/api/recent")).buscas; } catch {}
+  if (modoComum()) return telaInicioComum(msg, exemplos, recentes);
   const sugestoes = exemplos?.length ? exemplos : (recentes.length ? recentes : ["estudar à noite", "treino", "festa", "churrasco com os amigos"]);
   app.innerHTML = `
     <div class="hero"><h1>Qual é a <span class="vibe">vibe</span> do seu momento?</h1>
@@ -374,7 +378,7 @@ async function buscar(texto) {
     <div class="indet"><i></i></div><div class="mudo">Interpretando a vibe…</div></div>`;
   try {
     const [r] = await Promise.all([api("POST", "/api/search", { text: texto }), new Promise(ok => setTimeout(ok, 450))]);
-    if (r.interpretacao?.tecnico) { setTecnico(true, false); }
+    if (r.interpretacao?.tecnico && !modoComum()) { setTecnico(true, false); }
     S.sid = r.session_id;
     if (r.estado === "inicio") return telaInicio(r.mensagem, r.exemplos);       // D1: vibe pouco clara
     if (r.estado === "sem_resultados") return telaSemResultados(r);             // D4
@@ -399,6 +403,7 @@ function telaSemResultados(r) {
 
 /* ---------- Resultados: biblioteca ---------- */
 function telaResultados(r) {
+  if (modoComum()) return telaResultadosComum(r);
   abas("buscar"); S.res = r;
   app.innerHTML = topbar("Nova busca") + `
     <div><h2 class="titulo-p">Resultados</h2><p class="mudo" style="margin-top:6px">${esc(r.interpretacao.resumo)}</p></div>
@@ -461,6 +466,7 @@ function painelBpm(d) {
 }
 
 function telaDJ(d, aviso) {
+  if (modoComum()) return telaPlayerComum(d, aviso);
   abas("buscar", true); S.dj = d;
   const quieto = !!app.querySelector(".dj");           // já estava no Modo DJ: só atualiza, sem reanimar nem rolar
   app.classList.toggle("sem-anim", quieto);
@@ -582,6 +588,159 @@ function telaDJ(d, aviso) {
     } catch (e) { toast(e.message); }
   };
   $("#b-salvar").onclick = () => logado() ? telaSalvar(d) : pedeConta();
+  app.querySelectorAll("[data-aj]").forEach(b => b.onclick = () => chama("adjust", { direction: b.dataset.aj }));
+  $("#b-vibe")?.addEventListener("click", () => { pararReproducao(); telaInicio(); });
+  if (!quieto) paraTop();
+}
+
+
+/* ---------- Modo de uso: "Para DJs" (telas técnicas) ou "Para ouvir" (telas simples) ---------- */
+function aplicaModo() {
+  document.body.classList.toggle("modo-comum", modoComum());
+  setTecnico(S.modo === "dj" ? guarda.get(K.tec) !== "0" : false, false);
+  const t = $("#tab-modo .tab-t");
+  if (t) t.textContent = S.modo === "dj" ? "Modo: DJ" : S.modo === "comum" ? "Modo: comum" : "Escolher modo";
+}
+function telaModo() {
+  pararReproducao(); abas(null); S.sid = null; S.dj = null; S.res = null; S.salvo = false;
+  const cartao = (id, icone, titulo, texto, itens, cta) => `<button class="modo-card ${id}" data-modo="${id}" type="button" ${S.modo === id ? 'aria-current="true"' : ""}>
+      ${ic(icone)}<h2>${titulo}</h2><p>${texto}</p><ul>${itens.map(i => `<li>${i}</li>`).join("")}</ul>
+      <span class="modo-ir">${cta} ${ic("chev")}</span></button>`;
+  app.innerHTML = `<div class="modo-esc">
+    <div class="hero"><h1>Como você quer usar o <span class="vibe">SoulsBPM</span>?</h1>
+      <p>Escolha o jeito que combina com você. Dá para trocar quando quiser, no menu.</p></div>
+    <div class="modo-cards">
+      ${cartao("dj", "disc", "Para DJs", "Monte sets com transições certas, olhando os números.",
+               ["BPM, chave Camelot e energia de cada faixa", "Trajetória do set e BPM alvo", "Motivos técnicos de cada troca"], "Entrar como DJ")}
+      ${cartao("comum", "heart", "Para ouvir sem complicação", "Conte o momento e receba músicas que combinam, sem termos técnicos.",
+               ["Escolha pelo clima: relaxar, treinar, festa…", "Uma música de cada vez, fácil de pular ou curtir", "Salve suas playlists com um toque"], "Entrar para ouvir")}
+    </div></div>`;
+  app.querySelectorAll("[data-modo]").forEach(b => b.onclick = () => {
+    S.modo = b.dataset.modo; guarda.set(K.modo, S.modo); aplicaModo(); S.busca = ""; irInicio();
+  });
+  paraTop();
+}
+
+/* ---------- Telas do modo comum: visual e vocabulário próprios ---------- */
+const CLIMAS = [["Relaxar", "música calma para relaxar", "moon", "#6aa8ff"], ["Estudar", "música calma para estudar", "list", "#3ddc97"],
+  ["Treinar", "treino pesado de academia", "sparkle", "#ff6b4a"], ["Festa", "festa animada para dançar", "disc", "#ff7ab8"],
+  ["Dirigir", "música para dirigir na estrada", "ouvir", "#ffb347"], ["Romance", "jantar romântico com jazz", "heart", "#ff5c8a"],
+  ["Churrasco", "churrasco com os amigos", "sun", "#ffd24a"], ["Chuva", "tristeza em dia de chuva", "note", "#8f7aff"]];
+function telaInicioComum(msg, exemplos, recentes) {
+  const outras = exemplos?.length ? exemplos : recentes;
+  app.innerHTML = `
+    <div class="hero"><h1>O que você quer <span class="vibe">ouvir</span> agora?</h1>
+      <p>Conte como está o seu momento. A gente separa as músicas e vai sugerindo a próxima.</p></div>
+    <form id="f-busca">
+      <textarea id="vibe" placeholder="Ex.: algo calmo para ler no sábado" aria-label="Descreva o que você quer ouvir">${esc(S.busca)}</textarea>
+      <button class="btn btn-pri">${ic("search")} Buscar músicas</button>
+    </form>
+    ${msg ? `<div class="aviso">${esc(msg)}</div>` : ""}
+    <div><div class="mudo cm-sub">Ou escolha um clima</div>
+      <div class="cm-humor">${CLIMAS.map(([n, f, i, c]) => `<button class="cm-tile" type="button" data-v="${esc(f)}" style="--c:${c}">${ic(i)}<span>${n}</span></button>`).join("")}</div></div>
+    ${outras?.length ? `<div class="exemplos"><div class="mudo">${exemplos?.length ? "Experimente:" : "Buscas recentes:"}</div>
+      <div class="chips">${outras.map(c => `<button class="chip" data-v="${esc(c)}">${esc(c)}</button>`).join("")}</div></div>` : ""}
+    <div class="rodape-nota">O SoulsBPM escolhe e ordena as músicas. Para ouvir, use o botão Ouvir (abre no Spotify ou no YouTube).</div>`;
+  $("#f-busca").onsubmit = e => { e.preventDefault(); buscar($("#vibe").value); };
+  $("#vibe").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); buscar($("#vibe").value); } };
+  app.querySelectorAll("[data-v]").forEach(b => b.onclick = () => buscar(b.dataset.v));
+}
+
+function telaResultadosComum(r) {
+  abas("buscar"); S.res = r;
+  app.innerHTML = topbar("Nova busca") + `
+    <div><h2 class="titulo-p">Achei estas músicas</h2><p class="mudo" style="margin-top:6px">Para: “${esc(S.busca)}”</p></div>
+    <div class="cm-acoes"><button class="btn btn-pri" id="cm-comecar" type="button">${ic("disc")} Começar a ouvir</button>
+      <button class="btn btn-sec" id="salvar-res" type="button">${ic("save")} Salvar como playlist</button></div>
+    <div class="cm-grade">${r.resultados.map(f => `
+      <article class="cm-item">
+        <div class="cm-linha">${capa(f, "p")}<div class="tx"><div class="tit">${esc(f.titulo)}</div><div class="art">${esc(f.artista)}</div>${ouvir(f)}</div></div>
+        <div class="cm-botoes"><button class="btn btn-sec pequeno" data-id="${esc(f.id)}" type="button">${ic("disc")} Começar daqui</button>
+          <button class="btn btn-sec pequeno icone" data-add="${esc(f.id)}" type="button" title="Adicionar a uma playlist" aria-label="Adicionar ${esc(f.titulo)} a uma playlist">${ic("plus")}</button></div>
+      </article>`).join("")}</div>`;
+  ligaVoltar(() => telaInicio());
+  $("#cm-comecar").onclick = () => entrarDJ(r.resultados[0].id);
+  app.querySelectorAll("[data-id]").forEach(b => b.onclick = () => entrarDJ(b.dataset.id));
+  app.querySelectorAll("[data-add]").forEach(b => b.onclick = () => adicionarAPlaylist(r.resultados.find(f => f.id === b.dataset.add)));
+  $("#salvar-res").onclick = () => salvarResultadosComoPlaylist(r);
+  paraTop();
+}
+
+async function salvarSetComum() {
+  if (!logado()) return pedeConta();
+  const t0 = S.busca ? S.busca.charAt(0).toUpperCase() + S.busca.slice(1) : "Minha playlist";
+  const nome = await pedeNome("Nome da playlist", t0.slice(0, 80), "Salvar");
+  if (!nome) return;
+  try { const r = await api("POST", `/api/session/${S.sid}/save`, { title: nome }); S.salvo = true; toast(`Playlist “${r.titulo}” salva`); }
+  catch (e) { toast(e.message); }
+}
+
+function telaPlayerComum(d, aviso) {
+  abas("buscar", true); S.dj = d;
+  const quieto = !!app.querySelector(".cm-player");
+  app.classList.toggle("sem-anim", quieto);
+  const a = d.atual, p = d.sugerida;
+  if (d.destino) S.salvo = true;
+  if (!S.tocando || S.tocando.id !== a.id) iniciarReproducao(a);
+  const selo = { combina_bem: "Combina muito com a que está tocando", ok: "Combina com a que está tocando", arriscada: "É uma mudança maior, mas é a mais parecida que achei" };
+  app.innerHTML = `
+    ${topbar(S.origem ? S.origem.rotulo : "Início")}
+    ${aviso ? `<div class="aviso">${esc(aviso)}</div>` : ""}
+    ${d.destino ? `<div class="destino on">${ic("save")}<span>As músicas que você escolher entram em <strong>${esc(d.destino.title)}</strong></span></div>` : ""}
+    <div class="cm-player">
+      <section class="painel cm-agora">
+        <div class="cm-rotulo">Tocando agora</div>
+        <div class="cm-capa">${capa(a, "g")}<div class="tx"><div class="tit">${esc(a.titulo)}</div><div class="art">${esc(a.artista)}</div>${ouvir(a)}</div></div>
+        <p class="mudo nota-ouvir">Ouça no Spotify ou no YouTube e volte aqui para escolher a próxima.</p>
+      </section>
+      <section class="painel cm-prox">
+        <div class="cm-rotulo">A seguir</div>
+        ${p ? `<div class="cm-capa">${capa(p, "g")}<div class="tx"><div class="tit">${esc(p.titulo)}</div><div class="art">${esc(p.artista)}</div>${ouvir(p)}</div></div>
+          <span class="selo ${p.classe}">${selo[p.classe]}</span>
+          <p class="narra" id="narra" aria-live="polite" hidden></p>
+          <div class="cm-botoes"><button class="btn btn-pri" id="b-aceitar" type="button">${ic("check")} Quero esta</button>
+            <button class="btn btn-sec" id="b-trocar" type="button">${ic("swap")} Outra sugestão</button>
+            <button class="btn btn-sec" id="b-explicar" type="button">${ic("sparkle")} Por que esta?</button></div>`
+          : `<div class="aviso">Acabaram as sugestões para este momento. Salve a playlist ou faça uma nova busca.</div>`}
+      </section>
+    </div>
+    ${d.dica === "ajustar_vibe" ? `<section class="dica"><strong>Não está acertando?</strong><p>Você pulou algumas seguidas. Quer mudar o clima?</p>
+      <div class="chips"><button class="chip" data-aj="calma">Mais calma</button><button class="chip" data-aj="animada">Mais animada</button>
+      <button class="chip" id="b-vibe">Buscar outra coisa</button></div></section>` : ""}
+    <details class="cm-fila"><summary>Sua sequência · ${d.sequencia.length} ${d.sequencia.length === 1 ? "música" : "músicas"}</summary>
+      <ol>${d.sequencia.map(f => `<li><strong>${esc(f.titulo)}</strong> <span class="mudo">${esc(f.artista)}</span></li>`).join("")}</ol></details>
+    <div class="cm-barra">
+      <button class="btn btn-sec" id="b-faixa-ant" type="button" ${d.pode_voltar ? "" : "disabled"}>${ic("prev")} Voltar</button>
+      <button class="btn btn-sec" id="b-pular" type="button">${ic("skip")} Pular esta</button>
+      <button class="btn ${d.curtida ? "btn-pri" : "btn-sec"}" id="b-curtir" type="button" aria-pressed="${!!d.curtida}">${ic("heart")} ${d.curtida ? "Curtida" : "Curtir"}</button>
+      ${d.destino ? "" : `<button class="btn btn-sec" id="b-salvar" type="button" ${d.sequencia.length < 2 ? "disabled title='Escolha uma música a seguir primeiro'" : ""}>${ic("save")} Salvar playlist</button>`}
+    </div>`;
+  S.redesenha = null;
+  const chama = (url, body) => comSpinner(async () => {
+    try { telaDJ(await api("POST", `/api/session/${S.sid}/${url}`, body)); } catch (e) { toast(e.message); }
+  });
+  ligaVoltar(sairDoDJ);
+  $("#b-aceitar")?.addEventListener("click", () => chama("accept"));
+  $("#b-trocar")?.addEventListener("click", () => chama("skip", { target: "sugestao" }));
+  $("#b-explicar")?.addEventListener("click", async () => {
+    const b = $("#b-explicar"), box = $("#narra");
+    b.disabled = true; box.hidden = false; box.className = "narra"; box.textContent = "Pensando…";
+    try {
+      const r = await api("POST", `/api/session/${S.sid}/explain`, { simples: true });
+      box.textContent = r.texto; box.classList.add(r.origem === "ia" ? "narra-ia" : "narra-regras");
+    } catch (e) { box.hidden = true; toast(e.message); }
+    finally { b.disabled = false; }
+  });
+  $("#b-faixa-ant").onclick = () => chama("back");
+  $("#b-pular").onclick = () => chama("skip", { target: "atual", elapsed_fraction: fracao() });
+  $("#b-curtir").onclick = async () => {
+    try {
+      const on = (await api("POST", `/api/session/${S.sid}/like`)).curtida, b = $("#b-curtir");
+      b.innerHTML = `${ic("heart")} ${on ? "Curtida" : "Curtir"}`;
+      b.classList.toggle("btn-pri", on); b.classList.toggle("btn-sec", !on); b.setAttribute("aria-pressed", String(on));
+    } catch (e) { toast(e.message); }
+  };
+  $("#b-salvar")?.addEventListener("click", salvarSetComum);
   app.querySelectorAll("[data-aj]").forEach(b => b.onclick = () => chama("adjust", { direction: b.dataset.aj }));
   $("#b-vibe")?.addEventListener("click", () => { pararReproducao(); telaInicio(); });
   if (!quieto) paraTop();
@@ -779,7 +938,7 @@ async function telaPlaylist(pid, minha, manterScroll = false) {
           <div class="meta so-tec"><span class="bpm-v">${f.bpm}</span>${chave(f.tom)}${energia(f.energia)}</div>${acoes(f, i)}</div>`).join("")}
       </section>` : `<div class="vazio">${minha ? "Playlist vazia. Faça uma busca e toque no + de uma faixa para adicioná-la aqui." : "Esta playlist está vazia."}</div>`}
       <div class="fim">
-        ${minha ? `<button class="btn btn-pri cheio" id="cont" ${n ? "" : "disabled"}>Continuar no Modo DJ</button>` : `<button class="btn btn-pri cheio" id="montar">Montar a minha</button>`}
+        ${minha ? `<button class="btn btn-pri cheio" id="cont" ${n ? "" : "disabled"}>${modoComum() ? "Continuar ouvindo" : "Continuar no Modo DJ"}</button>` : `<button class="btn btn-pri cheio" id="montar">Montar a minha</button>`}
         <button class="btn btn-sec cheio" id="copiar">${ic("copy")} Copiar link</button></div>
       ${n ? `<section class="painel exportar" aria-label="Exportar playlist">
         <h3>Levar para o Spotify ou YouTube</h3>
@@ -890,6 +1049,7 @@ $("#priv-apagar").onclick = async () => { try { await api("DELETE", "/api/histor
 $("#tab-buscar").onclick = async () => { if (!(await saidaOk())) return; pararReproducao(); irInicio(); };
 $("#tab-playlists").onclick = async () => { if (!(await saidaOk())) return; if (location.pathname !== "/") history.pushState(null, "", "/"); telaPlaylists(); };
 $("#tab-priv").onclick = abrirPrivacidade;
+$("#tab-modo").onclick = async () => { if (!(await saidaOk())) return; pararReproducao(); telaModo(); };
 $("#tab-conta").onclick = async () => { if (!S.carregou) await carregaConta(); if (logado()) { if (!(await saidaOk())) return; sair(); } else location.assign("/login"); };
 $("#consent-sim").onclick = () => { guarda.set(K.consent, "sim"); $("#consent").hidden = true; telaInicio(); };
 $("#consent-nao").onclick = () => { guarda.set(K.consent, "nao"); $("#consent").hidden = true; };
@@ -915,11 +1075,12 @@ async function sair() {
 async function iniciar() {
   const m = location.pathname.match(/^\/p\/([\w-]+)/);
   if (!S.carregou) { await carregaConta(); S.carregou = true; }
-  setTecnico(guarda.get(K.tec) !== "0", false);        // DJ: BPM, chave e energia visíveis por padrão
+  aplicaModo();                                         // DJ: BPM, chave e energia visíveis por padrão; comum: só o essencial
   if (m) return telaPlaylist(m[1], false);              // link compartilhado abre sem login
   if (!logado() && (S.conta?.exigir_login || guarda.get(K.visitante) !== "1")) { location.replace("/login"); return; }
   if (!logado() && guarda.get(K.consent) === null) $("#consent").hidden = false;
   if (logado() && !S.conta.tem_email && !S.avisouEmail) { S.avisouEmail = true; setTimeout(() => toast("Sua conta não tem e-mail. Cadastre um em Privacidade para poder recuperar a senha."), 800); }
+  if (!S.modo) return telaModo();                       // primeira vez: escolhe entre DJ e comum
   telaInicio();
 }
 iniciar();

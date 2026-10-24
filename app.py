@@ -296,7 +296,7 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
     def explain(sid):
         if not limite_ia.permite(request.remote_addr):
             raise Erro("Muitos pedidos de explicação em pouco tempo. Espere um minuto e tente de novo.", 429)
-        return jsonify(motor.explicar(sid))
+        return jsonify(motor.explicar(sid, corpo().get("simples") is True))     # simples: modo comum, sem termos técnicos
 
     @app.post("/api/session/<sid>/like")
     def like(sid):

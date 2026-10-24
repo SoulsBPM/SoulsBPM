@@ -547,14 +547,14 @@ class Motor:
         s.estado = SUGERINDO
         return self._estado_dj(s, [REAJUSTANDO, SUGERINDO], ["BpmAlvoAlterado", "ProximaFaixaSolicitada"])
 
-    def explicar(self, sid):
+    def explicar(self, sid, simples=False):
         """Explica em linguagem natural por que a faixa sugerida combina com a atual (IA, ou as regras sem IA)."""
         s = self.sessao(sid)
         if not s.sugerida or not s.sequencia:
             raise Erro("Não há sugestão para explicar.")
         r = s.sugerida
         return self.narrador.explicar(self._atual(s), r["faixa"], r["tecnica"], r.get("motivos", []),
-                                      s.interp.get("resumo"), s.bpm_alvo)
+                                      s.interp.get("resumo"), s.bpm_alvo, simples=bool(simples), vibe=r.get("vibe"))
 
     # salvar (evento SequenciaSalva) ------------------------------------------
     def salvar(self, sid, titulo=None, tags=None):

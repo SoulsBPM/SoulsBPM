@@ -619,3 +619,59 @@ html[data-aovivo] .cred-bpm{display:inline}
 #dlg-email input{margin-top:8px}
 #em-erro:empty{display:none}
 #em-erro{margin-top:8px}
+
+/* ---------- Escolha do modo e telas do modo comum ----------
+   DJ: console escuro, números em destaque. Comum: cantos mais redondos, fundo suave, letra maior e nenhum número técnico. */
+.modo-esc{display:flex;flex-direction:column;gap:22px;padding-top:8px}
+.modo-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:16px;max-width:920px}
+.modo-card{text-align:left;display:flex;flex-direction:column;gap:10px;min-height:280px;padding:24px;border:1px solid var(--linha-forte);
+  border-radius:18px;background:var(--painel);transition:transform .15s,border-color .15s,box-shadow .15s}
+.modo-card:hover{transform:translateY(-2px);border-color:var(--indigo)}
+.modo-card[aria-current=true]{border-color:var(--indigo);box-shadow:0 0 0 3px color-mix(in srgb,var(--indigo) 30%,transparent)}
+.modo-card .ic{width:34px;height:34px;stroke-width:1.6}
+.modo-card.dj .ic{color:var(--ambar)}
+.modo-card.comum .ic{color:#ff7ab8}
+.modo-card.comum{background:linear-gradient(150deg,color-mix(in srgb,#ff7ab8 12%,var(--painel)),var(--painel) 60%)}
+.modo-card h2{font:700 28px/1.1 var(--fonte)}
+.modo-card.dj h2{font-family:var(--num);font-size:34px;letter-spacing:.01em}
+.modo-card p{color:var(--mudo)}
+.modo-card ul{margin:0;padding-left:18px;color:var(--mudo);font-size:15px;display:grid;gap:4px}
+.modo-ir{margin-top:auto;display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--indigo-claro)}
+.modo-ir .ic{width:18px;height:18px}
+
+body.modo-comum{--r-painel:20px;--r-ctl:14px;
+  background-image:radial-gradient(900px 420px at 88% -8%,color-mix(in srgb,var(--indigo) 22%,transparent),transparent),
+                   radial-gradient(700px 380px at -8% 8%,color-mix(in srgb,#ff7ab8 14%,transparent),transparent);background-attachment:fixed}
+body.modo-comum .hero h1{font:700 clamp(36px,7vw,60px)/1.06 var(--fonte);letter-spacing:-.02em}
+body.modo-comum .titulo-p{font:700 clamp(28px,5vw,40px)/1.1 var(--fonte);letter-spacing:-.01em}
+body.modo-comum .hero p{font-size:19px}
+.cm-sub{margin:0 0 10px;font-weight:600}
+.cm-humor{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.cm-tile{display:flex;flex-direction:column;align-items:flex-start;gap:14px;padding:16px;min-height:96px;border-radius:20px;text-align:left;
+  border:1px solid color-mix(in srgb,var(--c) 35%,var(--linha));font-size:18px;font-weight:600;
+  background:linear-gradient(145deg,color-mix(in srgb,var(--c) 26%,var(--painel)),var(--painel) 85%)}
+.cm-tile .ic{width:26px;height:26px;color:var(--c)}
+.cm-tile:hover{transform:translateY(-2px);border-color:var(--c)}
+.cm-acoes{display:flex;flex-wrap:wrap;gap:10px}
+.cm-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.cm-item{display:flex;flex-direction:column;gap:12px;padding:14px;background:var(--painel);border:1px solid var(--linha);border-radius:var(--r-painel);min-width:0}
+.cm-linha{display:flex;gap:12px;align-items:flex-start;min-width:0}
+.cm-linha .tx{min-width:0}
+.cm-botoes{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.cm-player{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:860px){.cm-player{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+.cm-agora,.cm-prox{padding:20px;display:flex;flex-direction:column;gap:14px}
+.cm-prox{border-color:color-mix(in srgb,var(--indigo) 55%,var(--linha))}
+.cm-rotulo{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--mudo);font-weight:700}
+.cm-capa{display:flex;gap:16px;align-items:flex-start;min-width:0}
+.cm-capa .tx{min-width:0}
+.cm-capa .tit{font:700 24px/1.15 var(--fonte)}
+.capa.g{width:104px;height:104px;border-radius:18px}.capa.g .ic{width:36px;height:36px}
+.cm-prox .selo{margin-top:0}
+.cm-prox .cm-botoes .btn-pri{flex:1 1 100%;min-height:54px;font-size:18px}
+.cm-fila{background:var(--painel);border:1px solid var(--linha);border-radius:var(--r-painel);padding:12px 16px}
+.cm-fila summary{cursor:pointer;font-weight:600}
+.cm-fila ol{margin:10px 0 0;padding-left:22px;display:grid;gap:6px}
+.cm-barra{position:sticky;bottom:0;z-index:5;margin-top:auto;display:flex;flex-wrap:wrap;gap:10px;padding:14px 0 calc(14px + env(safe-area-inset-bottom));
+  background:linear-gradient(to top,var(--noite) 72%,var(--noite-t))}
+.cm-barra .btn{flex:1 1 140px;min-height:52px}
