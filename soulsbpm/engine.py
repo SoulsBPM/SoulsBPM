@@ -275,6 +275,34 @@ class Motor:
                       resumo=f"Entendi: artista {oficial} e artistas parecidos")
         return None
 
+    def _busca_musica(self, texto, interp):
+        """Se o texto é o NOME de uma música (ou um trecho de letra), acha a música e monta 'ela + do mesmo artista +
+        parecidas'. Sem fonte ao vivo, procura título/artista no catálogo local. Devolve um aviso (ou None)."""
+        pontos, info = None, None
+        try:
+            if self.provedor and hasattr(self.provedor, "candidatas_musica"):
+                ident = None
+                if self.ia is not None and not interp["clara"]:         # letra/frase solta: a IA palpita, o Last.fm confirma
+                    ident = lambda t: sugestor.identificar_musica(self.ia, t)
+                r = self.provedor.candidatas_musica(texto, ident)
+                if r:
+                    pontos, faixas, info = r
+                    self.adicionar_faixas(faixas)
+            elif not self.provedor:
+                pontos = musicfinder.destaques_no_catalogo(self.catalogo, texto) or None
+        except FonteErro as e:
+            return None if interp["clara"] else f"Não consegui consultar as fontes de música agora ({e})."
+        if not pontos and not info:
+            return None
+        interp.update(pontos=pontos or {}, clara=True, energia=None, tags={}, generos=[])
+        if info:
+            nome = ", ".join(f"“{t}” de {a}" for a, t in info["achadas"][:2])
+            interp["resumo"] = f"Entendi: a música {nome} e parecidas"
+            interp["sem_bpm"] = info["sem_bpm"]
+        else:
+            interp["resumo"] = "Entendi: essa música do catálogo e parecidas"
+        return None
+
     # IA na busca: artistas sugeridos e similaridade semântica (ambos opcionais) ---------
     def _pedir_artistas_ia(self, texto):
         """Começa em segundo plano a sugestão de artistas pela IA. None se o recurso não estiver disponível."""
@@ -320,6 +348,8 @@ class Motor:
         self._limpar_sessoes()
         interp = musicfinder.interpretar(texto)
         aviso_artista = self._busca_artista(texto, interp)
+        if interp.get("pontos") is None:
+            aviso_artista = aviso_artista or self._busca_musica(texto, interp)
         s = Sessao(user_id, texto, interp)
         s.estado = BUSCANDO
         base = {"session_id": s.id, "eventos": ["BuscaContextualEfetuada"],
@@ -330,10 +360,10 @@ class Motor:
         if not interp["clara"]:                                        # D1: vibe pouco clara
             s.estado = INICIO
             return {**base, "estado": INICIO, "caminho_estados": [BUSCANDO, INICIO], "resultados": [],
-                    "mensagem": "Não entendi o clima. Tente descrever o momento, por exemplo:",
+                    "mensagem": "Não achei essa música nem entendi o clima. Digite o nome da música, a banda, um trecho da letra ou o momento, por exemplo:",
                     "exemplos": musicfinder.EXEMPLOS}
         perfil, tags = self.perfil(user_id), list(interp["tags"])
-        if self.provedor and interp.get("artista") is None:            # modo ao vivo: traz faixas reais da vibe
+        if self.provedor and interp.get("pontos") is None:             # modo ao vivo: traz faixas reais da vibe
             sugestao = self._pedir_artistas_ia(texto)                  # a IA pensa enquanto o Last.fm responde
             achadas = []
             try:
@@ -347,16 +377,24 @@ class Motor:
         achados = musicfinder.buscar(self.catalogo, interp, limite=LIMITE_RESULTADOS * 4)
         # perfil só reordena os resultados já alinhados à vibe
         achados.sort(key=lambda f: -(f["vibe"] + dj.ajuste_perfil(perfil.bonus(None, f, tags))))
-        if interp.get("artista") is None:                              # busca por artista pode repetir o artista
+        if interp.get("pontos") is None:                                # busca por artista/música pode repetir o artista
             achados = musicfinder.diversificar(achados, LIMITE_RESULTADOS, MAX_POR_ARTISTA)
         else:
             achados = achados[:LIMITE_RESULTADOS]
         if not achados:                                                # D4: nada encontrado
             s.estado = SEM_RESULTADOS
             self.sessoes[s.id] = s
+            if interp.get("sem_bpm"):
+                a, t = interp["sem_bpm"][0]
+                return {**base, "estado": SEM_RESULTADOS, "caminho_estados": [BUSCANDO, SEM_RESULTADOS],
+                        "resultados": [], "exemplos": musicfinder.EXEMPLOS,
+                        "mensagem": f"Achei “{t}” de {a}, mas ainda não tenho o BPM e o tom dela para montar a transição. Tente outra música."}
             return {**base, "estado": SEM_RESULTADOS, "caminho_estados": [BUSCANDO, SEM_RESULTADOS],
                     "resultados": [], "mensagem": "Nenhuma faixa combina com essa vibe. Tente outra descrição.",
                     "exemplos": musicfinder.EXEMPLOS}
+        if interp.get("sem_bpm") and not base.get("aviso"):
+            a, t = interp["sem_bpm"][0]
+            base["aviso"] = f"Achei “{t}” de {a}, mas ainda não tenho o BPM e o tom dela. Mostrei músicas parecidas."
         s.estado = RESULTADOS
         self.sessoes[s.id] = s
         return {**base, "estado": RESULTADOS, "caminho_estados": [BUSCANDO, RESULTADOS], "resultados": achados}

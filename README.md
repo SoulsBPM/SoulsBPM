@@ -10,7 +10,7 @@ uma faixa leva à outra de forma natural, como um DJ faria, e aprende com o que 
 
 ## O que ele faz
 
-- **Busca por vibe ou artista.** Escreva a frase do jeito que quiser; o app entende o clima, a energia e os gêneros e encontra músicas reais.
+- **Busca por qualquer coisa.** Digite o nome da música (ou "Artista - Música"), a banda, um trecho da letra ou o clima. Música pelo nome: o Last.fm acha e traz as do mesmo artista e parecidas; trecho de letra: a IA palpita e o Last.fm confirma (nada inventado). Se a música não tiver BPM/tom na fonte, o app avisa e mostra parecidas.
 - **Modo DJ.** A partir de uma faixa, sugere a próxima com base em BPM (±5%, também em meio tempo e dobro), tom na roda de Camelot e energia, e mostra a **% de compatibilidade** e os motivos da sugestão.
 - **Controle de BPM.** Os botões − 5 / + 5 definem um BPM alvo e a IA sugere faixas que levam o set até ele, em passos que soam naturais.
 - **Aprende com você.** Curtir, aceitar, salvar e pular (antes ou depois da metade da faixa) ajustam as próximas sugestões. Vários pulos seguidos oferecem atalhos “mais calma” / “mais animada”.
@@ -30,7 +30,7 @@ Os dois modos usam a mesma conta, as mesmas playlists e o mesmo motor de sugest�
 ## Como usar
 
 1. Abra o link e, se quiser salvar playlists, crie uma conta em *Entrar / Criar conta* (ou escolha *Continuar sem conta*).
-2. Descreva uma vibe ou digite um artista e toque em **Buscar**.
+2. Digite uma música, banda, trecho de letra ou vibe e toque em **Buscar**.
 3. Em uma faixa, toque em **Criar sequência** para entrar no Modo DJ.
 4. No Modo DJ, **Aceitar** passa a música sugerida para a faixa atual; **Trocar sugestão** pede outra. Cada música tem **Salvar na playlist** (depois vira “Música já salva em…”) e a faixa atual tem **Curtir**. Com conta dá para escolher uma playlist de destino: tudo que for aceito entra nela, e **Desfazer aceite** e **Voltar** também tiram a faixa. No fim, **Salvar toda a sequência** cria uma playlist nova com o set.
 5. **Playlists** (precisam de conta): em *Playlists* use **Nova playlist**; nos resultados da busca use **Salvar resultados como playlist** ou o **+** de uma faixa para colocá-la em uma playlist existente (ou criar uma na hora).
@@ -109,7 +109,7 @@ pip install -r requirements.txt
 #   LASTFM_API_KEY=sua_chave
 #   GETSONGBPM_API_KEY=sua_chave
 python app.py               # http://localhost:5000
-python -m unittest discover -s tests -t .   # 369 testes
+python -m unittest discover -s tests -t .   # 381 testes
 ```
 
 No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e `python3`.

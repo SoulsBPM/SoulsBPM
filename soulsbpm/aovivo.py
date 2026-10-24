@@ -119,6 +119,37 @@ class LastFm:
         achados = self._lista((r.get("results") or {}).get("artistmatches"), "artist")
         return achados[0].get("name") if achados and achados[0].get("name") else None
 
+    def buscar_faixas(self, consulta, limite=10):
+        """[(artista, título)] das músicas que o Last.fm acha para o texto. "Artista - Título" também funciona."""
+        achadas = []
+        if " - " in consulta:
+            quem, _, nome = consulta.partition(" - ")
+            r = self._chamar("track.search", track=nome.strip(), artist=quem.strip(), limit=limite)
+            achadas += self._pares_faixa(r)
+        r = self._chamar("track.search", track=consulta, limit=limite)
+        achadas += self._pares_faixa(r)
+        return list(dict.fromkeys(achadas))
+
+    def _pares_faixa(self, r):
+        itens = self._lista((r.get("results") or {}).get("trackmatches"), "track")
+        saida = []
+        for t in itens:
+            a = t.get("artist")
+            a = a.get("name") if isinstance(a, dict) else a
+            if isinstance(a, str) and a and isinstance(t.get("name"), str) and t["name"]:
+                saida.append((a, t["name"]))
+        return saida
+
+    def faixas_similares(self, artista, titulo, limite=6):
+        r = self._chamar("track.getsimilar", artist=artista, track=titulo, limit=limite, autocorrect=1)
+        saida = []
+        for t in self._lista(r.get("similartracks"), "track"):
+            a = t.get("artist")
+            a = a.get("name") if isinstance(a, dict) else a
+            if isinstance(a, str) and a and isinstance(t.get("name"), str) and t["name"]:
+                saida.append((a, t["name"]))
+        return saida
+
     def top_tracks_artista(self, artista, limite=15):
         r = self._chamar("artist.gettoptracks", artist=artista, limit=limite, autocorrect=1)
         return [(artista, t["name"]) for t in self._lista(r.get("toptracks"), "track") if t.get("name")]
@@ -225,6 +256,45 @@ class AoVivo:
         faixas = self._resolver(ordem[: self.max_faixas + 12], por_faixa)
         pontos = {f["id"]: pesos[(f["artista"], f["titulo"])] for f in faixas}
         return oficial, pontos, faixas
+
+    def candidatas_musica(self, texto, identificar=None, max_achadas=3, minimo=0.7, similares=6, do_artista=4):
+        """Busca pelo NOME da música (ou "Artista - Música"). Se o Last.fm não achar e `identificar` existir (IA que
+        reconhece música por trecho de letra), cada palpite é confirmado no Last.fm antes de valer.
+        Devolve (pontos {id: nota}, faixas, info) ou None. A música achada vale 1,0; as do mesmo artista 0,8 e as
+        parecidas 0,7. info = {"achadas": [(artista, título)], "sem_bpm": [(artista, título)]}."""
+        from .musicfinder import relevancia
+        texto = (texto or "").strip()
+        if len(texto) < 2:
+            return None
+        achadas = [(a, t) for a, t in self.lastfm.buscar_faixas(texto, 10) if relevancia(texto, t, a) >= minimo][:max_achadas]
+        if not achadas and identificar is not None:
+            for a, t in identificar(texto)[:max_achadas]:                 # palpite da IA: só vale se o Last.fm confirma
+                ok = [(x, y) for x, y in self.lastfm.buscar_faixas(f"{a} - {t}", 5)
+                      if relevancia(f"{a} {t}", y, x) >= 0.8]
+                if ok and ok[0] not in achadas:
+                    achadas.append(ok[0])
+        if not achadas:
+            return None
+        pesos, ordem, por_faixa = {}, [], {}
+        def junta(faixas, peso):
+            for chave in faixas:
+                if chave not in por_faixa:
+                    por_faixa[chave] = {"tags": [], "generos": []}
+                    ordem.append(chave)
+                    pesos[chave] = peso
+        junta(achadas, 1.0)
+        artista, titulo = achadas[0]
+        try:                                                   # o resto é enfeite: se falhar, ficam só as achadas
+            junta([(artista, t) for _, t in self.lastfm.top_tracks_artista(artista, do_artista + 1)
+                   if (artista, t) not in por_faixa][:do_artista], 0.8)
+            junta(self.lastfm.faixas_similares(artista, titulo, similares), 0.7)
+        except FonteErro as e:
+            log.warning("Last.fm: parecidas de %r ignoradas (%s)", titulo, e)
+        faixas = self._resolver(ordem[: self.max_faixas], por_faixa)
+        ids = {(f["artista"], f["titulo"]): f["id"] for f in faixas}
+        pontos = {ids[k]: pesos[k] for k in ordem if k in ids}
+        sem_bpm = [k for k in achadas if k not in ids]
+        return pontos, faixas, {"achadas": achadas, "sem_bpm": sem_bpm}
 
     def candidatas_sugeridas(self, nomes, interp, max_artistas=3, por_artista=8):
         """Faixas dos artistas que a IA sugeriu para a vibe. Cada nome é confirmado no Last.fm (nome quase igual,

@@ -65,6 +65,37 @@ def _casa(token: str, termo: str) -> bool:
     return token.startswith(termo[:-1]) if termo.endswith("*") else token == termo
 
 
+_ARTIGOS = {"a", "o", "as", "os", "de", "da", "do", "the", "and", "e"}
+
+
+def _tokens(txt):
+    return set(re.findall(r"[a-z0-9]+", normalizar(txt or "")))
+
+
+def relevancia(consulta: str, titulo: str, artista: str = "") -> float:
+    """Quanto o texto digitado parece ser o nome desta música (ou o artista dela): 0 a 1.
+    Compara as palavras (sem acento, sem maiúsculas): vale o melhor entre título, artista e os dois juntos."""
+    q = _tokens(consulta) - _ARTIGOS or _tokens(consulta)
+    if not q:
+        return 0.0
+    melhor = 0.0
+    for alvo in (_tokens(titulo), _tokens(artista), _tokens(titulo) | _tokens(artista)):
+        alvo = (alvo - _ARTIGOS) or alvo
+        if not alvo:
+            continue
+        comum = len(q & alvo)
+        if comum:
+            f, g = comum / len(q), comum / len(alvo)
+            melhor = max(melhor, 2 * f * g / (f + g))
+    return round(melhor, 3)
+
+
+def destaques_no_catalogo(catalogo: list, texto: str, limite: int = 3, minimo: float = 0.7) -> dict:
+    """{id: 1,0} das faixas do catálogo cujo título/artista combinam com o texto (catálogo de amostra, sem Last.fm)."""
+    pontuadas = sorted(((relevancia(texto, f["titulo"], f["artista"]), f["id"]) for f in catalogo), key=lambda x: (-x[0], x[1]))
+    return {i: 1.0 for s, i in pontuadas[:limite] if s >= minimo}
+
+
 def rotulo_energia(e):
     if e is None:
         return None

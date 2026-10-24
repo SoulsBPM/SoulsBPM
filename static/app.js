@@ -353,7 +353,7 @@ async function telaInicio(msg, exemplos) {
     <div class="hero"><h1>Qual é a <span class="vibe">vibe</span> do seu momento?</h1>
       <p>Descreva o clima ou o momento (ex.: “música calma para estudar à noite”). A IA escolhe por onde começar e conduz o BPM de uma faixa à outra.</p></div>
     <form id="f-busca">
-      <textarea id="vibe" placeholder="Ex.: música calma para estudar à noite" aria-label="Descreva a vibe">${esc(S.busca)}</textarea>
+      <textarea id="vibe" placeholder="Nome da música, banda, trecho da letra ou o clima (ex.: calma para estudar)" aria-label="Descreva a vibe">${esc(S.busca)}</textarea>
       <button class="btn btn-pri">${ic("search")} Buscar faixas</button>
     </form>
     ${msg ? `<div class="aviso">${esc(msg)}</div>` : ""}
@@ -613,7 +613,7 @@ function telaInicioComum(msg, exemplos, recentes) {
     <div class="hero"><h1>O que você quer <span class="vibe">ouvir</span> agora?</h1>
       <p>Conte como está o seu momento. A gente separa as músicas e vai sugerindo a próxima.</p></div>
     <form id="f-busca">
-      <textarea id="vibe" placeholder="Ex.: algo calmo para ler no sábado" aria-label="Descreva o que você quer ouvir">${esc(S.busca)}</textarea>
+      <textarea id="vibe" placeholder="Nome da música, banda, trecho da letra ou o clima (ex.: algo calmo)" aria-label="Descreva o que você quer ouvir">${esc(S.busca)}</textarea>
       <button class="btn btn-pri">${ic("search")} Buscar músicas</button>
     </form>
     ${msg ? `<div class="aviso">${esc(msg)}</div>` : ""}
