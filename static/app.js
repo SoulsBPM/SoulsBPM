@@ -695,7 +695,7 @@ function telaPlayerComum(d, aviso) {
       <section class="painel cm-agora">
         <div class="cm-rotulo">Tocando agora</div>
         <div class="cm-capa">${capa(a, "g")}<div class="tx"><div class="tit">${esc(a.titulo)}</div><div class="art">${esc(a.artista)}</div>${ouvir(a)}</div></div>
-        <div class="salva-linha">${botaoSalvarFaixa(d, a)}</div>
+        <div class="salva-linha cm-botoes"><button class="btn pequeno ${d.curtida ? "btn-pri" : "btn-sec"}" id="b-curtir" type="button" aria-pressed="${!!d.curtida}">${ic("heart")} ${d.curtida ? "Curtida" : "Curtir"}</button>${botaoSalvarFaixa(d, a)}</div>
         <p class="mudo nota-ouvir">Ouça no Spotify ou no YouTube e volte aqui para escolher a próxima.</p>
       </section>
       <section class="painel cm-prox">
@@ -714,9 +714,8 @@ function telaPlayerComum(d, aviso) {
       <ol>${d.sequencia.map(f => `<li><strong>${esc(f.titulo)}</strong> <span class="mudo">${esc(f.artista)}</span></li>`).join("")}</ol></details>
     <div class="cm-barra">
       <button class="btn btn-sec" id="b-faixa-ant" type="button" ${d.pode_voltar ? "" : "disabled"}>${ic("prev")} Voltar</button>
-      <button class="btn btn-sec" id="b-pular" type="button">${ic("skip")} Pular esta</button>
-      <button class="btn ${d.curtida ? "btn-pri" : "btn-sec"}" id="b-curtir" type="button" aria-pressed="${!!d.curtida}">${ic("heart")} ${d.curtida ? "Curtida" : "Curtir"}</button>
-      ${d.destino ? "" : `<button class="btn btn-sec" id="b-salvar" type="button" ${d.sequencia.length < 2 ? "disabled title='Escolha uma música a seguir primeiro'" : ""}>${ic("save")} Salvar sequência</button>`}
+      <button class="btn btn-sec" id="b-pular" type="button">${ic("skip")} Pular música escolhida</button>
+      ${d.destino ? "" : `<button class="btn btn-sec" id="b-salvar" type="button" ${d.sequencia.length < 2 ? "disabled title='Escolha uma música a seguir primeiro'" : ""}>${ic("save")} Salvar toda a sequência</button>`}
     </div>`;
   S.redesenha = null;
   const chama = (url, body) => comSpinner(async () => {
