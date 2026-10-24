@@ -511,6 +511,7 @@ function telaDJ(d, aviso) {
           ${p.motivos?.length ? `<div class="motivos so-tec"><div><div class="t">Por que a IA sugeriu</div><ul>${p.motivos.map(m => `<li>${esc(m)}</li>`).join("")}</ul></div>${roda(a.tom, p.tom)}</div>` : ""}
           ${p.arriscada ? `<p class="nota-risco">Não achei faixa com BPM e chave bem próximos; esta é a mais perto disso.</p>` : ""}
           <p class="narra" id="narra" aria-live="polite" hidden></p>
+          <button class="btn btn-pri troca" id="b-aceitar" type="button" aria-label="${logado() ? "Salvar" : "Aceitar"} ${esc(p.titulo)}, ${esc(p.artista)}${logado() ? " na playlist" : ""}">${logado() ? `${ic("save")} Salvar na playlist` : `${ic("check")} Aceitar`}</button>
           <button class="btn btn-sec troca" id="b-explicar" type="button">${ic("sparkle")} Explicar com IA</button>
           <button class="btn btn-sec troca" id="b-trocar" type="button">${ic("swap")} Trocar sugestão</button>`
           : `<div class="aviso">Acabaram as sugestões para esta vibe. Salve a sequência ou faça uma nova busca.</div>`}
@@ -527,7 +528,6 @@ function telaDJ(d, aviso) {
       <button class="btn btn-sec" id="b-pular" type="button">${ic("skip")} Pular</button>
       <button class="btn so-ico ${d.curtida ? "btn-pri" : "btn-sec"}" id="b-curtir" type="button" aria-label="Curtir" aria-pressed="${!!d.curtida}">${ic("heart")}<span class="rot-s">${d.curtida ? "Curtida" : "Curtir"}</span></button>
       <button class="btn btn-sec so-ico" id="b-salvar" type="button" aria-label="Salvar sequência" ${d.sequencia.length < 2 ? "disabled title='Aceite uma sugestão primeiro'" : ""}>${ic("save")}<span class="rot-s">Salvar sequência</span></button>
-      <button class="btn btn-pri" id="b-aceitar" type="button" ${p ? "" : "disabled"}>${logado() ? `${ic("save")} Salvar na playlist` : `${ic("check")} Aceitar`}</button>
     </div>`;
   S.redesenha = () => desenhaTraj(d.sequencia, p, alvo);
   S.redesenha();
@@ -549,13 +549,13 @@ function telaDJ(d, aviso) {
       return true;
     } catch (e) { toast(e.message); return false; }
   };
-  $("#b-aceitar").onclick = async () => {
+  $("#b-aceitar")?.addEventListener("click", async () => {
     if (logado() && !d.destino) {                                // primeiro "Salvar na playlist": pergunta onde
       const pl = await escolhePlaylist("Em qual playlist salvar as faixas que você aceitar?");
       if (!pl || !(await defineDestino(pl.id))) return;
     }
     chama("accept");
-  };
+  });
   $("#b-destino")?.addEventListener("click", async () => {
     const pl = await escolhePlaylist("Em qual playlist salvar as faixas que você aceitar?");
     if (pl) defineDestino(pl.id);

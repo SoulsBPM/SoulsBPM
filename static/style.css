@@ -278,7 +278,6 @@ details.dev div{margin-top:2px;word-break:break-word}
 @media (max-width:559px){.transporte{gap:6px}.transporte .btn{min-width:0;padding:0 8px;gap:5px;font-size:15px;min-height:54px;flex:1 1 0}.transporte .btn .ic{width:20px;height:20px}.transporte .rot-s{display:none}.transporte .btn.so-ico{flex:0 0 52px;padding:0}.transporte .btn.so-ico.btn-pri{flex:0 0 52px}.transporte .btn-pri{flex:1.2 1 0;font-size:16px}}
 @media (min-width:900px){.transporte .btn-pri{flex:0 1 280px;margin-left:auto}}
 @media (max-width:389px){.transporte .btn{padding:0 6px;font-size:14px}.transporte .btn .ic{width:18px;height:18px}.transporte .btn.so-ico,.transporte .btn.so-ico.btn-pri{flex:0 0 46px;padding:0}.transporte .btn-pri{flex:1.1 1 0;font-size:15px}}
-@media (max-width:339px){.transporte #b-aceitar .ic{display:none}}
 
 /* salvar, playlist ---------------------------------------------------- */
 .campo-l{font-size:15px;color:var(--mudo);font-weight:500;margin-bottom:-4px}
