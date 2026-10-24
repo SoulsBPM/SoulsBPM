@@ -8,7 +8,7 @@ from soulsbpm.engine import Motor
 from soulsbpm.fontes import Cache, GetSongBPM
 from soulsbpm.store import Store
 
-ACHADAS = {"yellow": [("Coldplay", "Yellow"), ("Outra Banda", "Yellow Submarine Blues")],
+ACHADAS = {"oi|lagum": [("Lagum", "Oi")], "yellow": [("Coldplay", "Yellow"), ("Outra Banda", "Yellow Submarine Blues")],
            "bohemian rhapsody": [("Queen", "Bohemian Rhapsody")]}
 TABELA = {("Coldplay", "Yellow"): (87, "B"), ("Coldplay", "Clocks"): (131, "Eb"), ("Coldplay", "Fix You"): (138, "Eb"),
           ("Keane", "Somewhere Only We Know"): (172, "C")}
@@ -20,7 +20,9 @@ def lastfm():
         m = q["method"]
         if m == "track.search":
             nome = q["track"].lower()
-            return {"results": {"trackmatches": {"track": [{"name": t, "artist": a} for a, t in ACHADAS.get(nome, [])]}}}
+            achadas = ACHADAS.get(nome + "|" + q["artist"].lower()) if "artist" in q else None
+            achadas = achadas or ACHADAS.get(nome, [])
+            return {"results": {"trackmatches": {"track": [{"name": t, "artist": a} for a, t in achadas]}}}
         if m == "artist.gettoptracks":
             return {"toptracks": {"track": [{"name": t, "artist": {"name": a}} for a, t in TABELA if a == q["artist"]]}}
         if m == "track.getsimilar":
@@ -76,6 +78,11 @@ class AoVivoMusicaTests(unittest.TestCase):
     def test_artista_hifen_titulo(self):
         r = self.prov().candidatas_musica("Coldplay - Yellow")
         self.assertIsNotNone(r)
+
+    def test_titulo_e_artista_juntos(self):
+        r = self.prov().candidatas_musica("oi lagum")
+        self.assertEqual(r[2]["achadas"], [("Lagum", "Oi")])
+        self.assertEqual(self.prov().candidatas_musica("lagum oi")[2]["achadas"], [("Lagum", "Oi")])
 
     def test_nao_acha(self):
         self.assertIsNone(self.prov().candidatas_musica("nada disso existe"))

@@ -267,6 +267,15 @@ class AoVivo:
         if len(texto) < 2:
             return None
         achadas = [(a, t) for a, t in self.lastfm.buscar_faixas(texto, 10) if relevancia(texto, t, a) >= minimo][:max_achadas]
+        if not achadas and " - " not in texto:                              # "oi lagum", "lagum oi": testa artista+música
+            palavras = texto.split()
+            if 2 <= len(palavras) <= 5:
+                cortes = [(" ".join(palavras[:i]), " ".join(palavras[i:])) for i in range(1, len(palavras))]
+                for quem, nome in cortes + [(n, q) for q, n in cortes]:
+                    r = self.lastfm._chamar("track.search", track=nome, artist=quem, limit=5)
+                    achadas = [(a, t) for a, t in self.lastfm._pares_faixa(r) if relevancia(texto, t, a) >= minimo][:max_achadas]
+                    if achadas:
+                        break
         if not achadas and identificar is not None:
             for a, t in identificar(texto)[:max_achadas]:                 # palpite da IA: só vale se o Last.fm confirma
                 ok = [(x, y) for x, y in self.lastfm.buscar_faixas(f"{a} - {t}", 5)
