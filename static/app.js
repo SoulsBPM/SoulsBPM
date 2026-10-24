@@ -702,11 +702,8 @@ function telaPlayerComum(d, aviso) {
         <div class="cm-rotulo">A seguir</div>
         ${p ? `<div class="cm-capa">${capa(p, "g")}<div class="tx"><div class="tit">${esc(p.titulo)}</div><div class="art">${esc(p.artista)}</div>${ouvir(p)}</div></div>
           <span class="selo ${p.classe}">${selo[p.classe]}</span>
-          <p class="narra" id="narra" aria-live="polite" hidden></p>
           <div class="cm-botoes"><button class="btn btn-pri" id="b-aceitar" type="button">${ic("check")} Quero esta</button>
-            <button class="btn btn-sec" id="b-trocar" type="button">${ic("swap")} Outra sugestão</button>
-            <button class="btn btn-sec" id="b-explicar" type="button">${ic("sparkle")} Por que esta?</button></div>
-          <div class="salva-linha">${botaoSalvarFaixa(d, p)}</div>`
+            <button class="btn btn-sec" id="b-trocar" type="button">${ic("swap")} Outra sugestão</button></div>`
           : `<div class="aviso">Acabaram as sugestões para este momento. Salve a playlist ou faça uma nova busca.</div>`}
       </section>
     </div>
@@ -719,7 +716,7 @@ function telaPlayerComum(d, aviso) {
       <button class="btn btn-sec" id="b-faixa-ant" type="button" ${d.pode_voltar ? "" : "disabled"}>${ic("prev")} Voltar</button>
       <button class="btn btn-sec" id="b-pular" type="button">${ic("skip")} Pular esta</button>
       <button class="btn ${d.curtida ? "btn-pri" : "btn-sec"}" id="b-curtir" type="button" aria-pressed="${!!d.curtida}">${ic("heart")} ${d.curtida ? "Curtida" : "Curtir"}</button>
-      ${d.destino ? "" : `<button class="btn btn-sec" id="b-salvar" type="button" ${d.sequencia.length < 2 ? "disabled title='Escolha uma música a seguir primeiro'" : ""}>${ic("save")} Salvar playlist</button>`}
+      ${d.destino ? "" : `<button class="btn btn-sec" id="b-salvar" type="button" ${d.sequencia.length < 2 ? "disabled title='Escolha uma música a seguir primeiro'" : ""}>${ic("save")} Salvar sequência</button>`}
     </div>`;
   S.redesenha = null;
   const chama = (url, body) => comSpinner(async () => {
@@ -729,15 +726,6 @@ function telaPlayerComum(d, aviso) {
   $("#b-aceitar")?.addEventListener("click", () => chama("accept"));
   $("#b-trocar")?.addEventListener("click", () => chama("skip", { target: "sugestao" }));
   ligaSalvarFaixa(d, () => telaPlayerComum(d, aviso));
-  $("#b-explicar")?.addEventListener("click", async () => {
-    const b = $("#b-explicar"), box = $("#narra");
-    b.disabled = true; box.hidden = false; box.className = "narra"; box.textContent = "Pensando…";
-    try {
-      const r = await api("POST", `/api/session/${S.sid}/explain`, { simples: true });
-      box.textContent = r.texto; box.classList.add(r.origem === "ia" ? "narra-ia" : "narra-regras");
-    } catch (e) { box.hidden = true; toast(e.message); }
-    finally { b.disabled = false; }
-  });
   $("#b-faixa-ant").onclick = () => chama("back");
   $("#b-pular").onclick = () => chama("skip", { target: "atual", elapsed_fraction: fracao() });
   $("#b-curtir").onclick = async () => {
