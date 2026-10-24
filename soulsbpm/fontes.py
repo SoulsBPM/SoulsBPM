@@ -204,6 +204,23 @@ class GetSongBPM:
         self.cache.put(k, resultado)
         return resultado
 
+    def procurar(self, texto, limite=10):
+        """[(artista, título)] que a própria GetSongBPM acha para o texto (nome da música, ou "música artista").
+        O BPM e o tom que vierem na busca já ficam no cache, então não custa outra consulta depois."""
+        r = self._get("/search/", type="song", lookup=texto, limit=limite)
+        saida = []
+        for item in (r.get("search") or []) if isinstance(r, dict) else []:
+            if not isinstance(item, dict) or not isinstance(item.get("title"), str) or not isinstance(item.get("artist"), dict):
+                continue
+            a, t = item["artist"].get("name"), item["title"]
+            if not isinstance(a, str) or not a or not t:
+                continue
+            dados = self._normaliza(item)
+            if dados:
+                self.cache.put(f"{_slug(a)}|{_slug(t)}", dados)
+            saida.append((a, t))
+        return list(dict.fromkeys(saida))
+
 
 def montar_faixa(idx, artista, titulo, dados, generos=(), tags=(), energia=None, duracao=None):
     """Monta a faixa no formato do catálogo. `dados` vem de GetSongBPM.buscar."""

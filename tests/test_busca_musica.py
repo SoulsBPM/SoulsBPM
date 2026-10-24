@@ -40,6 +40,20 @@ def bpm():
     return GetSongBPM("k", Cache(), http, pausa=0)
 
 
+class SoGetSongBPMTests(unittest.TestCase):
+    def test_acha_pelo_getsongbpm_quando_lastfm_nao_conhece(self):
+        def http_bpm(url):
+            if "type=song" in url and "lookup=mundo+novo" in url:
+                return {"search": [{"id": "9", "title": "Mundo Novo", "tempo": "100", "key_of": "Am",
+                                    "artist": {"name": "Banda Z"}}]}
+            return {"search": []}
+        prov = AoVivo(LastFm("k", lambda u: {}, pausa=0), GetSongBPM("k", Cache(), http_bpm, pausa=0))
+        pontos, faixas, info = prov.candidatas_musica("mundo novo")
+        self.assertEqual(info["achadas"], [("Banda Z", "Mundo Novo")])
+        self.assertEqual([f["bpm"] for f in faixas], [100])
+        self.assertEqual(info["sem_bpm"], [])
+
+
 class IAFalsa:
     def __init__(self, resposta):
         self.resposta, self.pedidos = resposta, []

@@ -276,6 +276,11 @@ class AoVivo:
                     achadas = [(a, t) for a, t in self.lastfm._pares_faixa(r) if relevancia(texto, t, a) >= minimo][:max_achadas]
                     if achadas:
                         break
+        if not achadas and hasattr(self.bpm, "procurar"):                  # a GetSongBPM também sabe achar por nome
+            try:
+                achadas = [(a, t) for a, t in self.bpm.procurar(texto, 10) if relevancia(texto, t, a) >= minimo][:max_achadas]
+            except FonteErro as e:
+                log.warning("GetSongBPM: busca por nome ignorada (%s)", e)
         if not achadas and identificar is not None:
             for a, t in identificar(texto)[:max_achadas]:                 # palpite da IA: só vale se o Last.fm confirma
                 ok = [(x, y) for x, y in self.lastfm.buscar_faixas(f"{a} - {t}", 5)
