@@ -408,7 +408,7 @@ function telaResultados(r) {
   abas("buscar"); S.res = r;
   app.innerHTML = topbar("Nova busca") + `
     <div><h2 class="titulo-p">Resultados</h2><p class="mudo" style="margin-top:6px">${esc(r.interpretacao.resumo)}</p></div>
-    <div><button class="btn btn-sec pequeno" id="salvar-res" type="button">${ic("save")} Salvar resultados como playlist</button></div>
+    <div><button class="btn btn-sec pequeno" id="salvar-res" type="button">${ic("save")} Salvar todos os resultados em uma playlist</button></div>
     <section class="painel tabela">
       <div class="th"><span></span><span>Faixa</span><span class="so-tec">BPM</span><span class="so-tec">Chave</span><span class="so-tec">Energia</span><span></span></div>
       ${r.resultados.map((f, i) => `
@@ -655,7 +655,7 @@ function telaResultadosComum(r) {
   app.innerHTML = topbar("Nova busca") + `
     <div><h2 class="titulo-p">Achei estas músicas</h2><p class="mudo" style="margin-top:6px">Para: “${esc(S.busca)}”</p></div>
     <div class="cm-acoes"><button class="btn btn-pri" id="cm-comecar" type="button">${ic("disc")} Começar a ouvir</button>
-      <button class="btn btn-sec" id="salvar-res" type="button">${ic("save")} Salvar como playlist</button></div>
+      <button class="btn btn-sec" id="salvar-res" type="button">${ic("save")} Salvar todas as músicas em uma playlist</button></div>
     <div class="cm-grade">${r.resultados.map(f => `
       <article class="cm-item">
         <div class="cm-linha">${capa(f, "p")}<div class="tx"><div class="tit">${esc(f.titulo)}</div><div class="art">${esc(f.artista)}</div>${ouvir(f)}</div></div>
@@ -796,7 +796,7 @@ async function pedeContaPlaylist() {
 }
 /* cria uma playlist (vazia ou com faixas) e devolve { id, title, faixas } ou null se a pessoa desistiu */
 async function novaPlaylist(sugestao = "", ids = [], tags = []) {
-  const nome = await pedeNome("Nova playlist", sugestao, "Criar");
+  const nome = await pedeNome(ids.length ? `Nome da playlist (vai guardar as ${ids.length} músicas dos resultados)` : "Nova playlist", sugestao, "Criar");
   if (!nome) return null;
   return api("POST", "/api/playlists", { title: nome, track_ids: ids, tags });
 }
