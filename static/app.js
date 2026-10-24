@@ -499,8 +499,8 @@ function telaDJ(d, aviso) {
           <div class="deck-id">${capa(a)}<div class="tx"><div class="tit">${esc(a.titulo)}</div><div class="art">${esc(a.artista)}</div>${ouvir(a)}</div></div>
           <div class="stats so-tec"><div class="stat"><span class="bpm-v">${a.bpm}</span><span class="u">BPM</span></div>${chave(a.tom, true)}
             <span class="en-l">${energia(a.energia)} ${e10(a.energia)}</span></div>
-          <div class="salva-linha">${botaoSalvarFaixa(d, a)}</div>
-          <p class="mudo nota-ouvir">Ouça no Spotify ou no YouTube e volte aqui para salvar na playlist ou pular.</p>
+          <div class="salva-linha cm-botoes"><button class="btn pequeno ${d.curtida ? "btn-pri" : "btn-sec"}" id="b-curtir" type="button" aria-pressed="${!!d.curtida}">${ic("heart")} ${d.curtida ? "Curtida" : "Curtir"}</button>${botaoSalvarFaixa(d, a)}</div>
+          <p class="mudo nota-ouvir">Ouça no Spotify ou no YouTube e volte aqui para aceitar a próxima ou salvar esta música.</p>
         </div>
       </section>
       <section class="painel deck-ia">
@@ -512,9 +512,7 @@ function telaDJ(d, aviso) {
             <span class="en-l">${energia(p.energia)} ${e10(p.energia)}</span></div>
           ${p.motivos?.length ? `<div class="motivos so-tec"><div><div class="t">Por que a IA sugeriu</div><ul>${p.motivos.map(m => `<li>${esc(m)}</li>`).join("")}</ul></div>${roda(a.tom, p.tom)}</div>` : ""}
           ${p.arriscada ? `<p class="nota-risco">Não achei faixa com BPM e chave bem próximos; esta é a mais perto disso.</p>` : ""}
-          <p class="narra" id="narra" aria-live="polite" hidden></p>
-          <button class="btn btn-pri troca" id="b-aceitar" type="button" aria-label="${logado() ? "Salvar" : "Aceitar"} ${esc(p.titulo)}, ${esc(p.artista)}${logado() ? " na playlist" : ""}">${logado() ? `${ic("save")} Salvar na playlist` : `${ic("check")} Aceitar`}</button>
-          <button class="btn btn-sec troca" id="b-explicar" type="button">${ic("sparkle")} Explicar com IA</button>
+          <button class="btn btn-pri troca" id="b-aceitar" type="button" aria-label="Aceitar ${esc(p.titulo)}, ${esc(p.artista)}">${ic("check")} Aceitar</button>
           <button class="btn btn-sec troca" id="b-trocar" type="button">${ic("swap")} Trocar sugestão</button>`
           : `<div class="aviso">Acabaram as sugestões para esta vibe. Salve a sequência ou faça uma nova busca.</div>`}
         </div>
@@ -527,9 +525,7 @@ function telaDJ(d, aviso) {
     <details class="dev"><summary>Estados e eventos</summary><div>${d.caminho_estados.join(" → ")} · ${d.eventos.join(", ")}</div></details>
     <div class="transporte">
       <button class="btn btn-sec so-ico" id="b-faixa-ant" type="button" aria-label="Voltar para a faixa anterior" ${d.pode_voltar ? "" : "disabled title='Ainda não há faixa anterior'"}>${ic("prev")}<span class="rot-s">Voltar</span></button>
-      <button class="btn btn-sec" id="b-pular" type="button">${ic("skip")} Pular</button>
-      <button class="btn so-ico ${d.curtida ? "btn-pri" : "btn-sec"}" id="b-curtir" type="button" aria-label="Curtir" aria-pressed="${!!d.curtida}">${ic("heart")}<span class="rot-s">${d.curtida ? "Curtida" : "Curtir"}</span></button>
-      <button class="btn btn-sec so-ico" id="b-salvar" type="button" aria-label="Salvar sequência" ${d.sequencia.length < 2 ? "disabled title='Aceite uma sugestão primeiro'" : ""}>${ic("save")}<span class="rot-s">Salvar sequência</span></button>
+      <button class="btn btn-sec so-ico" id="b-salvar" type="button" aria-label="Salvar toda a sequência" ${d.sequencia.length < 2 ? "disabled title='Aceite uma sugestão primeiro'" : ""}>${ic("save")}<span class="rot-s">Salvar toda a sequência</span></button>
     </div>`;
   S.redesenha = () => desenhaTraj(d.sequencia, p, alvo);
   S.redesenha();
@@ -551,13 +547,7 @@ function telaDJ(d, aviso) {
       return true;
     } catch (e) { toast(e.message); return false; }
   };
-  $("#b-aceitar")?.addEventListener("click", async () => {
-    if (logado() && !d.destino) {                                // primeiro "Salvar na playlist": pergunta onde
-      const pl = await escolhePlaylist("Em qual playlist salvar as faixas que você aceitar?");
-      if (!pl || !(await defineDestino(pl.id))) return;
-    }
-    chama("accept");
-  });
+  $("#b-aceitar")?.addEventListener("click", () => chama("accept"));
   $("#b-destino")?.addEventListener("click", async () => {
     const pl = await escolhePlaylist("Em qual playlist salvar as faixas que você aceitar?");
     if (pl) defineDestino(pl.id);
@@ -569,24 +559,11 @@ function telaDJ(d, aviso) {
   $("#b-bpm-auto")?.addEventListener("click", () => chama("bpm", { auto: true }));
   $("#b-trocar")?.addEventListener("click", () => chama("skip", { target: "sugestao" }));
   ligaSalvarFaixa(d, () => telaDJ(d, aviso));
-  $("#b-explicar")?.addEventListener("click", async () => {     // a IA (ou, sem IA, as regras) explica a transição
-    const b = $("#b-explicar"), box = $("#narra");
-    b.disabled = true; box.hidden = false; box.className = "narra"; box.textContent = "Pensando…";
-    try {
-      const r = await api("POST", `/api/session/${S.sid}/explain`);
-      box.textContent = r.texto;                                  // textContent: nada vindo do servidor vira HTML
-      box.classList.add(r.origem === "ia" ? "narra-ia" : "narra-regras");
-      box.title = r.origem === "ia" ? "Explicação escrita por IA a partir dos dados da transição"
-                                    : "Resumo feito pelas regras do app (IA indisponível agora)";
-    } catch (e) { box.hidden = true; toast(e.message); }
-    finally { b.disabled = false; }
-  });
   $("#b-faixa-ant").onclick = () => chama("back");
-  $("#b-pular").onclick = () => chama("skip", { target: "atual", elapsed_fraction: fracao() });
   $("#b-curtir").onclick = async () => {
     try {
       const on = (await api("POST", `/api/session/${S.sid}/like`)).curtida, b = $("#b-curtir");
-      b.innerHTML = `${ic("heart")}<span class="rot-s">${on ? "Curtida" : "Curtir"}</span>`;
+      b.innerHTML = `${ic("heart")} ${on ? "Curtida" : "Curtir"}`;
       b.classList.toggle("btn-pri", on); b.classList.toggle("btn-sec", !on); b.setAttribute("aria-pressed", String(on));
     } catch (e) { toast(e.message); }
   };
