@@ -351,7 +351,7 @@ async function telaInicio(msg, exemplos) {
   const sugestoes = exemplos?.length ? exemplos : (recentes.length ? recentes : ["estudar à noite", "treino", "festa", "churrasco com os amigos"]);
   app.innerHTML = `
     <div class="hero"><h1>Qual é a <span class="vibe">vibe</span> do seu momento?</h1>
-      <p>Descreva o clima ou o momento (ex.: “música calma para estudar à noite”). A IA escolhe por onde começar e conduz o BPM de uma faixa à outra.</p></div>
+      <p>Descreva a sua vibe agora...</p></div>
     <form id="f-busca">
       <textarea id="vibe" placeholder="Nome da música, banda, trecho da letra ou o clima (ex.: calma para estudar)" aria-label="Descreva a vibe">${esc(S.busca)}</textarea>
       <button class="btn btn-pri">${ic("search")} Buscar faixas</button>
