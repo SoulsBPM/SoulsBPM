@@ -259,6 +259,14 @@ def create_app(db_path=None, catalog_path=None, provedor=None, buscas_por_minuto
                                      "aprende_pesos": aprendizado is not None},
                         "aprendizado": aprendizado.estado() if aprendizado else None})
 
+    @app.get("/api/diagnostico")
+    def diagnostico():
+        """Mostra onde a busca por um artista para (GetSongBPM e IA). Não revela chaves."""
+        if not limite_busca.permite(request.remote_addr):
+            raise Erro("Muitas consultas em pouco tempo. Espere um minuto.", 429)
+        texto = (request.args.get("q") or "Calvin Harris").strip()[:60]
+        return jsonify(motor.diagnosticar(texto))
+
     @app.post("/api/search")
     def search():
         if not limite_busca.permite(request.remote_addr):

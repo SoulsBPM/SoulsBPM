@@ -166,3 +166,13 @@ class ErroDeDigitacaoTests(unittest.TestCase):
             self.assertEqual(r["resultados"], [])
             self.assertNotIn("corrigido", r)
             self.assertLessEqual(len(ia.pedidos), 3)
+
+
+class DiagnosticoTests(unittest.TestCase):
+    def test_endpoint_mostra_onde_para_sem_chaves(self):
+        from app import create_app
+        app = create_app(":memory:", provedor=AoVivo(fonte(sem_listagem=True)))
+        d = app.test_client().get("/api/diagnostico?q=Coldplay").get_json()
+        self.assertEqual(d["gsb_artista"], "Coldplay")
+        self.assertEqual(d["gsb_musicas_do_artista"], 0)
+        self.assertNotIn("key", str(d).lower())

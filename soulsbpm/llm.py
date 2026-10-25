@@ -141,6 +141,7 @@ class InterpretadorIA:
         self._lock = threading.Lock()
         self._falhas, self._falhas_max, self._pausa, self._agora = 0, falhas_max, pausa, agora
         self._pausado_ate = 0.0
+        self.ultimo_erro = None                      # motivo da última falha (sem chave nem texto do usuário)
 
     def _corpo(self, texto):
         msg = f"<vibe>{texto}</vibe>"
@@ -254,6 +255,7 @@ class InterpretadorIA:
 
     def _falhou(self, motivo):
         with self._lock:
+            self.ultimo_erro = str(motivo)[:80]
             self._falhas += 1
             if self._falhas >= self._falhas_max:
                 self._pausado_ate = self._agora() + self._pausa

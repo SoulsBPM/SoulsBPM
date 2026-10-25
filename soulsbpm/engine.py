@@ -338,6 +338,35 @@ class Motor:
         if notas:
             interp["semantica"] = notas
 
+    def diagnosticar(self, texto):
+        """Passo a passo da busca por artista, para descobrir onde ela para (sem chaves nem dados de ninguém)."""
+        d = {"texto": texto, "fonte_ao_vivo": bool(self.provedor), "ia": self.ia is not None}
+        gsb = getattr(self.provedor, "bpm", None)
+        if gsb is None:
+            d["conclusao"] = "sem GetSongBPM (falta GETSONGBPM_API_KEY?)"
+            return d
+        def passo(nome, fn):
+            try:
+                d[nome] = fn()
+            except Exception as e:
+                d[nome] = f"ERRO {type(e).__name__}: {str(e)[:120]}"
+        passo("gsb_artista", lambda: gsb.buscar_artista(texto))
+        passo("gsb_musicas_do_artista", lambda: len(gsb.faixas_do_artista(texto, 10)))
+        passo("gsb_musica_pelo_nome", lambda: gsb.procurar(texto, 3))
+        if self.ia is not None:
+            musicas = sugestor.musicas_do_artista(self.ia, texto)
+            d["ia_musicas"] = len(musicas)
+            d["ia_em_pausa"] = bool(self.ia.em_pausa()) if hasattr(self.ia, "em_pausa") else None
+            d["ia_ultimo_erro"] = getattr(self.ia, "ultimo_erro", None)
+            conf = []
+            for a, t in musicas[:4]:
+                try:
+                    conf.append(f"{t}: {'BPM ok' if gsb.buscar(a, t) else 'sem BPM'}")
+                except Exception as e:
+                    conf.append(f"{t}: ERRO {type(e).__name__}")
+            d["ia_confirmadas_na_gsb"] = conf
+        return d
+
     # busca (evento BuscaContextualEfetuada) --------------------------------
     def buscar(self, user_id, texto):
         """Busca como no YouTube: se nada for achado, a IA corrige erros de digitação e a busca roda de novo."""
