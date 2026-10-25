@@ -5,6 +5,7 @@ léxico em português como reserva. Tudo isolado atrás de `interpretar()`.
 """
 import re
 import unicodedata
+from difflib import SequenceMatcher
 
 EXEMPLOS = [
     "música calma para estudar à noite",
@@ -72,9 +73,18 @@ def _tokens(txt):
     return set(re.findall(r"[a-z0-9]+", normalizar(txt or "")))
 
 
+def _casam(a, b):
+    """Duas palavras iguais, ou quase iguais (erro de digitação: 'haris' ≈ 'harris', 'yelow' ≈ 'yellow')."""
+    return a == b or (len(a) >= 4 and len(b) >= 4 and SequenceMatcher(None, a, b).ratio() >= 0.8)
+
+
+def _em_comum(q, alvo):
+    return sum(1 for x in q if any(_casam(x, y) for y in alvo))
+
+
 def relevancia(consulta: str, titulo: str, artista: str = "") -> float:
     """Quanto o texto digitado parece ser o nome desta música (ou o artista dela): 0 a 1.
-    Compara as palavras (sem acento, sem maiúsculas): vale o melhor entre título, artista e os dois juntos."""
+    Compara as palavras (sem acento, sem maiúsculas, tolerando erro de digitação): vale o melhor entre título, artista e os dois juntos."""
     q = _tokens(consulta) - _ARTIGOS or _tokens(consulta)
     if not q:
         return 0.0
@@ -83,7 +93,7 @@ def relevancia(consulta: str, titulo: str, artista: str = "") -> float:
         alvo = (alvo - _ARTIGOS) or alvo
         if not alvo:
             continue
-        comum = len(q & alvo)
+        comum = _em_comum(q, alvo)
         if comum:
             f, g = comum / len(q), comum / len(alvo)
             melhor = max(melhor, 2 * f * g / (f + g))

@@ -340,6 +340,21 @@ class Motor:
 
     # busca (evento BuscaContextualEfetuada) --------------------------------
     def buscar(self, user_id, texto):
+        """Busca como no YouTube: se nada for achado, a IA corrige erros de digitação e a busca roda de novo."""
+        r = self._buscar(user_id, texto)
+        if r["resultados"] or self.ia is None:
+            return r
+        novo = sugestor.corrigir_busca(self.ia, texto.strip())
+        if not novo:
+            return r
+        r2 = self._buscar(user_id, novo, registrar=False)
+        if r2["resultados"]:
+            r2["corrigido"] = novo
+            r2["texto_original"] = texto.strip()
+            return r2
+        return r
+
+    def _buscar(self, user_id, texto, registrar=True):
         if texto is not None and not isinstance(texto, str):
             raise Erro("O texto da busca deve ser uma frase.")
         texto = (texto or "").strip()
@@ -358,7 +373,8 @@ class Motor:
                 "interpretacao": self._interp_publica(interp)}
         if aviso_artista:
             base["aviso"] = aviso_artista
-        self.store.add_history(user_id, "search", query=texto)
+        if registrar:
+            self.store.add_history(user_id, "search", query=texto)
         if not interp["clara"]:                                        # D1: vibe pouco clara
             s.estado = INICIO
             return {**base, "estado": INICIO, "caminho_estados": [BUSCANDO, INICIO], "resultados": [],

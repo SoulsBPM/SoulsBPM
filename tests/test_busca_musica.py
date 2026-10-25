@@ -143,3 +143,26 @@ class ArtistaViaIATests(unittest.TestCase):
     def test_sem_ia_o_artista_nao_quebra(self):
         r = self.motor(None).buscar(None, "Coldplay")
         self.assertIn(r["estado"], ("inicio", "sem_resultados"))
+
+
+class ErroDeDigitacaoTests(unittest.TestCase):
+    def test_relevancia_tolera_erro(self):
+        self.assertGreaterEqual(musicfinder.relevancia("calvin haris", "Summer", "Calvin Harris"), 0.7)
+        self.assertGreaterEqual(musicfinder.relevancia("yelow", "Yellow", "Coldplay"), 0.7)
+        self.assertLess(musicfinder.relevancia("zebra", "Yellow", "Coldplay"), 0.3)
+
+    def test_ia_corrige_e_a_busca_roda_de_novo(self):
+        ia = IAFalsa('{"corrigido": "Coldplay - Yellow"}')
+        m = Motor([], Store(":memory:"), provedor=AoVivo(fonte()), ia=ia)
+        r = m.buscar(None, "koldplei yelou")
+        self.assertEqual(r["estado"], "resultados")
+        self.assertEqual(r["corrigido"], "Coldplay - Yellow")
+        self.assertEqual(r["resultados"][0]["titulo"], "Yellow")
+
+    def test_correcao_igual_ou_lixo_nao_gera_laco(self):
+        for resp in ('{"corrigido": "kjhgf zxcv"}', '{"corrigido": 3}', "lixo", '{"corrigido": "<b>x</b>"}'):
+            ia = IAFalsa(resp)
+            r = Motor([], Store(":memory:"), provedor=AoVivo(fonte()), ia=ia).buscar(None, "kjhgf zxcv")
+            self.assertEqual(r["resultados"], [])
+            self.assertNotIn("corrigido", r)
+            self.assertLessEqual(len(ia.pedidos), 3)

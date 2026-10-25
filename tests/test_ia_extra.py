@@ -272,7 +272,7 @@ class TestBuscaComIA(unittest.TestCase):
         ia = IAFalsa('{"artistas": ["Maré Alta"]}')
         m = Motor([], Store(":memory:"), provedor=provedor(), ia=ia, max_artistas_ia=0)
         self.assertEqual(m.buscar("u1", TEXTO)["estado"], "sem_resultados")
-        self.assertEqual(ia.chamadas, [])
+        self.assertEqual([c for c in ia.chamadas if "corrige buscas" not in c[0]], [])   # só a correção ortográfica pode rodar
 
     def test_provedor_sem_suporte_nao_chama_a_ia(self):
         class SoTags:
@@ -280,7 +280,7 @@ class TestBuscaComIA(unittest.TestCase):
                 return []
         ia = IAFalsa('{"artistas": ["Maré Alta"]}')
         self.novo(ia, SoTags()).buscar("u1", TEXTO)
-        self.assertEqual(ia.chamadas, [])
+        self.assertEqual([c for c in ia.chamadas if "corrige buscas" not in c[0]], [])
 
 
 PREV = {"id": "p", "titulo": "Névoa de Domingo", "artista": "Maré Baixa", "bpm": 73, "tom": "8A", "energia": 0.3}

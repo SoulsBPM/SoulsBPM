@@ -407,7 +407,8 @@ function telaResultados(r) {
   if (modoComum()) return telaResultadosComum(r);
   abas("buscar"); S.res = r;
   app.innerHTML = topbar("Nova busca") + `
-    <div><h2 class="titulo-p">Resultados</h2><p class="mudo" style="margin-top:6px">${esc(r.interpretacao.resumo)}</p></div>
+    <div><h2 class="titulo-p">Resultados</h2><p class="mudo" style="margin-top:6px">${esc(r.interpretacao.resumo)}</p>
+      ${r.corrigido ? `<p class="mudo" style="margin-top:4px">Mostrando resultados para <b>${esc(r.corrigido)}</b></p>` : ""}</div>
     <div><button class="btn btn-sec pequeno" id="salvar-res" type="button">${ic("save")} Salvar todos os resultados numa playlist</button></div>
     <section class="painel tabela">
       <div class="th"><span></span><span>Faixa</span><span class="so-tec">BPM</span><span class="so-tec">Chave</span><span class="so-tec">Energia</span><span></span></div>
@@ -630,7 +631,8 @@ function telaInicioComum(msg, exemplos, recentes) {
 function telaResultadosComum(r) {
   abas("buscar"); S.res = r;
   app.innerHTML = topbar("Nova busca") + `
-    <div><h2 class="titulo-p">Achei estas músicas</h2><p class="mudo" style="margin-top:6px">Para: “${esc(S.busca)}”</p></div>
+    <div><h2 class="titulo-p">Achei estas músicas</h2><p class="mudo" style="margin-top:6px">Para: “${esc(r.corrigido || S.busca)}”</p>
+      ${r.corrigido ? `<p class="mudo" style="margin-top:4px">Corrigi o que você digitou (“${esc(S.busca)}”).</p>` : ""}</div>
     <div class="cm-acoes"><button class="btn btn-pri" id="cm-comecar" type="button">${ic("disc")} Começar a ouvir</button>
       <button class="btn btn-sec" id="salvar-res" type="button">${ic("save")} Salvar todos os resultados numa playlist</button></div>
     <div class="cm-grade">${r.resultados.map(f => `

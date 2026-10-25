@@ -108,7 +108,7 @@ pip install -r requirements.txt
 # crie um arquivo .env ao lado do app.py com:
 #   GETSONGBPM_API_KEY=sua_chave
 python app.py               # http://localhost:5000
-python -m unittest discover -s tests -t .   # 384 testes
+python -m unittest discover -s tests -t .   # 387 testes
 ```
 
 No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e `python3`.
