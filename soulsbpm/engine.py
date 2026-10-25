@@ -66,6 +66,8 @@ class Motor:
         self.sessoes = {}
         self.provedor = provedor              # modo ao vivo: busca faixas reais a cada vibe (soulsbpm/aovivo.py)
         # recursos de IA, todos opcionais e com reserva: sem eles o app funciona como antes
+        if ia is not None and hasattr(provedor, "usar_ia"):
+            provedor.usar_ia(ia)              # a GetSongBPM não lista músicas por artista: a IA ajuda
         self.ia = ia                          # modelo de linguagem: sugere artistas e narra as transições
         self.embeddings = embeddings          # similaridade semântica entre a frase e as faixas
         self.aprendizado = aprendizado        # pesos da nota aprendidos com o feedback

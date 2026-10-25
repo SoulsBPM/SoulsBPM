@@ -11,7 +11,7 @@ def _s(t):
     return re.sub(r"[^a-z0-9]+", " ", "".join(c for c in t if not unicodedata.combining(c))).strip()
 
 
-def gsb_falso(tabela, similares=None, impostor=None, sem_tom=(), sem_tempo=False):
+def gsb_falso(tabela, similares=None, impostor=None, sem_tom=(), sem_tempo=False, sem_listagem=False):
     """tabela: {(artista, título): (bpm, tom)}. similares: {artista: [nomes]}.
     impostor: nome devolvido para um artista que não existe (a busca de artista sempre acha algo)."""
     similares = similares or {}
@@ -40,6 +40,8 @@ def gsb_falso(tabela, similares=None, impostor=None, sem_tom=(), sem_tempo=False
             if m:
                 t, a = m.groups()
                 return {"search": [item(x, y, *v) for (x, y), v in tabela.items() if _s(y) == _s(t) and _s(x) == _s(a)][:lim]}
+            if look.startswith("artist:") and sem_listagem:
+                return {"search": []}
             if look.startswith("artist:"):
                 a = look[7:]
                 return {"search": [item(x, y, *v) for (x, y), v in tabela.items() if _s(x) == _s(a)][:lim]}

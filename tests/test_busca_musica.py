@@ -122,3 +122,24 @@ class MotorTests(unittest.TestCase):
         m = Motor([], Store(":memory:"), provedor=AoVivo(fonte()))
         r = m.buscar(None, "xyzzy qwerty")
         self.assertEqual(r["estado"], "inicio")
+
+
+class ArtistaViaIATests(unittest.TestCase):
+    """A GetSongBPM não lista as músicas de um artista: a IA diz as famosas e a GetSongBPM confirma o BPM."""
+    RESP = ('{"musicas": [{"artista": "Coldplay", "titulo": "Clocks"}, {"artista": "Coldplay", "titulo": "Fix You"},'
+            ' {"artista": "Coldplay", "titulo": "Musica Inventada"}, {"artista": "Outro", "titulo": "Intruso"}]}')
+
+    def motor(self, ia):
+        return Motor([], Store(":memory:"), provedor=AoVivo(fonte(sem_listagem=True)), ia=ia)
+
+    def test_busca_por_artista_com_ia(self):
+        r = self.motor(IAFalsa(self.RESP)).buscar(None, "Coldplay")
+        self.assertEqual(r["estado"], "resultados")
+        titulos = {x["titulo"] for x in r["resultados"]}
+        self.assertEqual(titulos & {"Clocks", "Fix You"}, {"Clocks", "Fix You"})
+        self.assertNotIn("Musica Inventada", titulos)          # a GetSongBPM não conhece: descartada
+        self.assertNotIn("Intruso", titulos)                   # de outro artista: nem entra
+
+    def test_sem_ia_o_artista_nao_quebra(self):
+        r = self.motor(None).buscar(None, "Coldplay")
+        self.assertIn(r["estado"], ("inicio", "sem_resultados"))

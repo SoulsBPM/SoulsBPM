@@ -52,8 +52,26 @@ class AoVivo:
 
     def __init__(self, getsongbpm, max_faixas=36, espera=10.0, trabalhadores=4):
         self.bpm = getsongbpm
+        self.ia, self._musicas_ia = None, {}
         self.max_faixas = max_faixas
         self.espera, self.pool = espera, ThreadPoolExecutor(max_workers=trabalhadores)
+
+    def usar_ia(self, ia):
+        """A GetSongBPM não lista as músicas de um artista; com IA, ela diz as mais famosas e a GetSongBPM confirma."""
+        self.ia = ia
+
+    def _faixas_artista(self, artista, n):
+        """[(artista, título)] do artista: primeiro o que a própria GetSongBPM devolver; senão as da IA (em cache)."""
+        achadas = self.bpm.faixas_do_artista(artista, n)
+        if achadas or self.ia is None:
+            return achadas
+        k = _slug(artista)
+        if k not in self._musicas_ia:
+            from . import sugestor
+            self._musicas_ia[k] = sugestor.musicas_do_artista(self.ia, artista)
+            if len(self._musicas_ia) > 200:
+                self._musicas_ia.pop(next(iter(self._musicas_ia)))
+        return self._musicas_ia[k][:n]
 
     @staticmethod
     def bpm_alvo(interp):
@@ -125,9 +143,9 @@ class AoVivo:
                     por_faixa[chave] = {"tags": [], "generos": []}
                     ordem.append(chave)
                     pesos[chave] = peso
-        junta(self.bpm.faixas_do_artista(oficial, por_artista), 1.0)
+        junta(self._faixas_artista(oficial, por_artista), 1.0)
         for outro in self.bpm.artistas_similares(oficial, similares):
-            junta(self.bpm.faixas_do_artista(outro, por_similar), 0.6)
+            junta(self._faixas_artista(outro, por_similar), 0.6)
         if not ordem:
             return None
         faixas = self._resolver(ordem[: self.max_faixas + 12], por_faixa)
@@ -183,10 +201,10 @@ class AoVivo:
         junta(achadas, 1.0)
         artista, titulo = achadas[0]
         try:                                                   # o resto é enfeite: se falhar, ficam só as achadas
-            junta([(artista, t) for _, t in self.bpm.faixas_do_artista(artista, do_artista + 1)
+            junta([(artista, t) for _, t in self._faixas_artista(artista, do_artista + 1)
                    if (artista, t) not in por_faixa][:do_artista], 0.8)
             for outro in self.bpm.artistas_similares(artista, 3):
-                junta(self.bpm.faixas_do_artista(outro, 2)[:2], 0.7)
+                junta(self._faixas_artista(outro, 2)[:2], 0.7)
         except FonteErro as e:
             log.warning("GetSongBPM: parecidas de %r ignoradas (%s)", titulo, e)
         faixas = self._resolver(ordem[: self.max_faixas], por_faixa)
@@ -208,7 +226,7 @@ class AoVivo:
                 if not oficial or SequenceMatcher(None, _slug(nome), _slug(oficial)).ratio() < 0.8:
                     log.info("IA sugeriu %r: não confirmado no GetSongBPM, descartado", nome)
                     continue
-                musicas = self.bpm.faixas_do_artista(oficial, por_artista)
+                musicas = self._faixas_artista(oficial, por_artista)
             except FonteErro as e:
                 log.warning("GetSongBPM: %s (sugestão %r ignorada)", e, nome)
                 continue

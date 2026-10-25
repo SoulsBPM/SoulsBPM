@@ -87,7 +87,7 @@ O ranking continua sendo feito pelas regras e pela nota explicável. A IA propõ
 
 ## Créditos
 
-Dados de músicas, BPM e tom: [GetSongBPM](https://getsongbpm.com) (link exigido pela licença da API). Não usa Last.fm.
+Dados de músicas, BPM e tom: [GetSongBPM](https://getsongbpm.com) (link exigido pela licença da API). Não usa Last.fm. A GetSongBPM não lista as músicas de um artista, então para busca por banda a **IA** diz as mais famosas e a GetSongBPM confirma o BPM de cada uma; sem chave de IA, busca por banda fica limitada.
 Fontes Barlow e Barlow Condensed (licença SIL OFL).
 
 Projeto da disciplina Tópicos Especiais · Professor: Érico Borgonove Cruz
@@ -108,7 +108,7 @@ pip install -r requirements.txt
 # crie um arquivo .env ao lado do app.py com:
 #   GETSONGBPM_API_KEY=sua_chave
 python app.py               # http://localhost:5000
-python -m unittest discover -s tests -t .   # 382 testes
+python -m unittest discover -s tests -t .   # 384 testes
 ```
 
 No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e `python3`.
