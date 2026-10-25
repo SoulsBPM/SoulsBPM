@@ -1,7 +1,6 @@
-"""Diagnóstico do modo ao vivo: testa Last.fm e GetSongBPM e mostra o que cada uma respondeu.
+"""Diagnóstico do modo ao vivo: testa a GetSongBPM (busca, BPM/tom, artista e BPM) e mostra o que ela respondeu.
 
 Uso (PowerShell):
-    $env:LASTFM_API_KEY="sua_chave"
     $env:GETSONGBPM_API_KEY="sua_chave"
     python tools/diagnostico.py
 As chaves nunca são impressas.
@@ -33,29 +32,10 @@ def limpa(txt, chaves):
 
 
 def main():
-    lf, gb = os.environ.get("LASTFM_API_KEY", ""), os.environ.get("GETSONGBPM_API_KEY", "")
-    print("Chave Last.fm:", f"definida ({len(lf)} caracteres)" if lf else "NÃO definida")
+    gb = os.environ.get("GETSONGBPM_API_KEY", "")
     print("Chave GetSongBPM:", f"definida ({len(gb)} caracteres)" if gb else "NÃO definida")
 
-    print("\n1) Last.fm — músicas da tag 'chill'")
-    if lf:
-        u = "https://ws.audioscrobbler.com/2.0/?" + urllib.parse.urlencode(
-            {"method": "tag.gettoptracks", "tag": "chill", "limit": 5, "api_key": lf, "format": "json"})
-        st, corpo = pegar(u, [lf])
-        print("   HTTP:", st)
-        try:
-            d = json.loads(corpo)
-            if d.get("error"):
-                print("   ERRO do Last.fm:", d.get("error"), d.get("message"))
-            else:
-                bloco = d.get("tracks") or d.get("toptracks") or {}
-                faixas = bloco.get("track") or []
-                print(f"   OK: {len(faixas)} faixas, por exemplo:",
-                      [f"{t['artist']['name']} - {t['name']}" for t in faixas[:3]])
-        except Exception:
-            print("   Resposta inesperada:", limpa(corpo[:300], [lf]))
-
-    print("\n2) GetSongBPM — busca 'Strobe' de deadmau5")
+    print("\n1) GetSongBPM — busca 'Strobe' de deadmau5")
     if gb:
         u = "https://api.getsong.co/search/?" + urllib.parse.urlencode(
             {"api_key": gb, "type": "both", "lookup": "song:Strobe artist:deadmau5", "limit": 3})
@@ -79,6 +59,17 @@ def main():
                 print("   Sem resultados ou erro. Resposta:", limpa(corpo[:300], [gb]))
         except Exception:
             print("   Resposta inesperada:", limpa(corpo[:300], [gb]))
+    for n, titulo, params in ((2, "artista 'Coldplay'", {"type": "artist", "lookup": "Coldplay", "limit": 2}),
+                              (3, "músicas com 128 BPM", None), (4, "música pelo nome 'Yellow'", {"type": "song", "lookup": "Yellow", "limit": 3})):
+        print(f"\n{n}) GetSongBPM — {titulo}")
+        if not gb:
+            continue
+        if params is None:
+            u = "https://api.getsong.co/tempo/?" + urllib.parse.urlencode({"api_key": gb, "bpm": 128, "limit": 3})
+        else:
+            u = "https://api.getsong.co/search/?" + urllib.parse.urlencode({"api_key": gb, **params})
+        st, corpo = pegar(u, [gb])
+        print("   HTTP:", st, "->", limpa(corpo[:300], [gb]))
     print("\nCopie tudo isto e mande para quem está te ajudando.")
 
 

@@ -1,7 +1,7 @@
 """A IA sugere artistas para a vibe (e o resto do app confirma tudo).
 
 O modelo de linguagem só PROPÕE nomes de artistas que combinam com o que a pessoa descreveu. Nada do que ele
-diz vai direto para a tela: cada nome é confirmado no Last.fm (nome quase igual ao sugerido, senão é descartado,
+diz vai direto para a tela: cada nome é confirmado no GetSongBPM (nome quase igual ao sugerido, senão é descartado,
 o que barra artista inventado) e cada música só entra se a GetSongBPM tiver BPM e tom dela. Se a IA não estiver
 ligada, falhar ou devolver lixo, a busca segue exatamente como antes.
 """
@@ -123,7 +123,7 @@ def validar_musicas(obj, maximo=3):
 
 def identificar_musica(ia, texto, maximo=3):
     """[(artista, título)] que a IA acha que o texto descreve (trecho de letra, nome...). Vazio se não houver IA,
-    se falhar ou se o texto for só um clima. Nunca levanta erro; quem chama confirma cada palpite no Last.fm."""
+    se falhar ou se o texto for só um clima. Nunca levanta erro; quem chama confirma cada palpite no GetSongBPM."""
     completar = getattr(ia, "completar", None)
     if completar is None or not (texto or "").strip():
         return []

@@ -7,11 +7,11 @@ import urllib.parse
 
 from app import create_app
 from soulsbpm import llm, musicfinder, narrador, sugestor
-from soulsbpm.aovivo import AoVivo, LastFm, id_faixa
+from soulsbpm.aovivo import AoVivo, id_faixa
 from soulsbpm.engine import Motor
 from soulsbpm.narrador import Narrador
 from soulsbpm.store import Store
-from tests.test_aovivo import bpm_falso
+from tests.fakes import gsb_falso
 
 CATALOGO = str(pathlib.Path(__file__).resolve().parent / "fixtures" / "catalog.json")
 TEXTO = "música calma para estudar à noite"
@@ -144,7 +144,7 @@ class TestAvaliarIASemNomes(unittest.TestCase):
                                  imprimir=lambda *_: None)
         self.assertEqual(resumo["ia_artistas"]["erros"], 1)
         self.assertEqual(resumo["ia_artistas"]["retornou"], 0)
-        self.assertGreater(resumo["lastfm_tags"]["retornou"], 0)
+        self.assertGreater(resumo["por_tempo"]["retornou"], 0)
 
 
 class TestMotivoDaIA(unittest.TestCase):
@@ -218,32 +218,13 @@ class TestSugestor(unittest.TestCase):
 
 
 ARTISTAS = {"Maré Alta": ["Faixa A1", "Faixa A2", "Faixa A3"], "Luz Suave": ["Faixa B1", "Faixa B2"]}
-IMPOSTOR = {"Totalmente Outro Nome": ["Faixa X1"]}     # o que o Last.fm devolve para um nome que não existe
 TABELA = {("Maré Alta", "Faixa A1"): (72, "Am"), ("Maré Alta", "Faixa A2"): (74, "Am"),
           ("Maré Alta", "Faixa A3"): (76, "Am"), ("Luz Suave", "Faixa B1"): (70, "Em"),
           ("Luz Suave", "Faixa B2"): (73, "Em"), ("Totalmente Outro Nome", "Faixa X1"): (80, "Am")}
 
 
-def lastfm_com_artistas():
-    """Last.fm falso: confirma só os artistas de ARTISTAS; qualquer outro nome devolve um artista bem diferente."""
-    def http(url):
-        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
-        metodo = q["method"][0]
-        if metodo == "artist.search":
-            nome = q["artist"][0].lower()
-            for oficial in ARTISTAS:
-                if oficial.lower() == nome:
-                    return {"results": {"artistmatches": {"artist": [{"name": oficial}]}}}
-            return {"results": {"artistmatches": {"artist": [{"name": "Totalmente Outro Nome"}]}}}
-        if metodo == "artist.gettoptracks":
-            todos = {**ARTISTAS, **IMPOSTOR}
-            return {"toptracks": {"track": [{"name": t} for t in todos.get(q["artist"][0], [])]}}
-        return {"tracks": {"track": []}}                         # tag.gettoptracks: nada
-    return LastFm("k", http, pausa=0)
-
-
 def provedor():
-    return AoVivo(lastfm_com_artistas(), bpm_falso(TABELA))
+    return AoVivo(gsb_falso(TABELA, impostor="Totalmente Outro Nome", sem_tempo=True))
 
 
 class TestCandidatasSugeridas(unittest.TestCase):

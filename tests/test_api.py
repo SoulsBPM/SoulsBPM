@@ -432,7 +432,7 @@ class TestSemChaves(unittest.TestCase):
     def test_sem_chaves_nao_cai_no_catalogo_de_amostra(self):
         import os
         from app import SemChaves
-        antigo = {k: os.environ.pop(k, None) for k in ("LASTFM_API_KEY", "GETSONGBPM_API_KEY", "SOULSBPM_CATALOG")}
+        antigo = {k: os.environ.pop(k, None) for k in ("GETSONGBPM_API_KEY", "SOULSBPM_CATALOG")}
         try:
             with self.assertRaises(SemChaves):
                 create_app(":memory:")

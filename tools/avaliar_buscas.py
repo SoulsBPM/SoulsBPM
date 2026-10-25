@@ -13,8 +13,8 @@ Passo 3 (resumo):
   Mostra, por fonte, quantas músicas você marcou, quantas foram boas e quantos artistas diferentes apareceram.
 
 Fontes comparadas (cada uma roda separada, com o mesmo ranking de vibe do app):
-  lastfm_tags   o caminho clássico: músicas mais populares das tags do Last.fm
-  ia_artistas   artistas sugeridos pela IA (confirmados no Last.fm), só se houver chave de IA
+  por_tempo   músicas populares perto do BPM da vibe (GetSongBPM)
+  ia_artistas   artistas sugeridos pela IA (confirmados na GetSongBPM), só se houver chave de IA
   combinado     o que o app realmente mostra (as duas fontes juntas, com embeddings se houver chave)
 
 Usa as mesmas chaves do app (arquivo .env) e o mesmo cache da GetSongBPM: rodar de novo não gasta a cota.
@@ -40,7 +40,7 @@ BUSCAS_PADRAO = [
     "domingo de manhã tomando café", "pagode para animar a casa", "tipo Calvin Harris",
     "rock para correr", "bossa nova no fim de tarde", "música para relaxar depois do trabalho",
 ]
-FONTES = ("lastfm_tags", "ia_artistas", "combinado")
+FONTES = ("por_tempo", "ia_artistas", "combinado")
 COLUNAS = ["busca", "fonte", "posicao", "artista", "titulo", "bpm", "tom", "energia", "vibe", "boa"]
 
 
@@ -105,7 +105,7 @@ def avaliar_busca(texto, provedor, ia, espiao, limite=10, embeddings=None, dormi
         linhas.extend(_linhas(texto, fonte, faixas))
 
     if interp["clara"] and not por_artista:
-        medir("lastfm_tags", lambda: _top(list(provedor.candidatas(interp)), interp, limite))
+        medir("por_tempo", lambda: _top(list(provedor.candidatas(interp)), interp, limite))
         if ia is not None and hasattr(provedor, "candidatas_sugeridas"):
             def via_ia():
                 nomes, motivo = sugestor.sugerir_detalhado(ia, texto)
@@ -239,7 +239,7 @@ def main(argv=None):
     dados.mkdir(parents=True, exist_ok=True)
     provedor = provedor_do_ambiente(dados)
     if provedor is None:
-        print("Faltam as chaves LASTFM_API_KEY e GETSONGBPM_API_KEY (coloque no arquivo .env).")
+        print("Falta a chave GETSONGBPM_API_KEY (coloque no arquivo .env).")
         return 1
     ia = llm_do_ambiente()
     if ia:

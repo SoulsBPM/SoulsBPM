@@ -10,7 +10,7 @@ uma faixa leva à outra de forma natural, como um DJ faria, e aprende com o que 
 
 ## O que ele faz
 
-- **Busca por qualquer coisa.** Digite o nome da música (ou "Artista - Música"), a banda, um trecho da letra ou o clima. Música pelo nome: o Last.fm acha e traz as do mesmo artista e parecidas; trecho de letra: a IA palpita e o Last.fm confirma (nada inventado). Se a música não tiver BPM/tom na fonte, o app avisa e mostra parecidas.
+- **Busca por qualquer coisa.** Digite o nome da música (ou "Artista - Música"), a banda, um trecho da letra ou o clima. Música pelo nome: a GetSongBPM acha e o app traz as do mesmo artista e de artistas parecidos; trecho de letra: a IA palpita e a GetSongBPM confirma (nada inventado). Se a música não tiver BPM/tom na fonte, o app avisa e mostra parecidas.
 - **Modo DJ.** A partir de uma faixa, sugere a próxima com base em BPM (±5%, também em meio tempo e dobro), tom na roda de Camelot e energia, e mostra a **% de compatibilidade** e os motivos da sugestão.
 - **Controle de BPM.** Os botões − 5 / + 5 definem um BPM alvo e a IA sugere faixas que levam o set até ele, em passos que soam naturais.
 - **Aprende com você.** Curtir, aceitar, salvar e pular (antes ou depois da metade da faixa) ajustam as próximas sugestões. Vários pulos seguidos oferecem atalhos “mais calma” / “mais animada”.
@@ -56,7 +56,7 @@ Quatro recursos, todos **opcionais e com reserva**: sem chave, sem rede ou com q
 | Recurso | O que faz | Precisa de |
 |---|---|---|
 | **Interpretar a vibe** | Um modelo de linguagem traduz a frase em tags, energia e gêneros (resposta validada contra listas fixas). | uma chave de IA (Gemini, Groq, OpenRouter ou Anthropic) |
-| **Sugerir artistas** | O modelo propõe até 6 artistas para a vibe. Cada nome é **confirmado no Last.fm** (nome quase igual, senão é descartado, o que barra artista inventado) e só entra música com BPM e tom na GetSongBPM. | a mesma chave de IA |
+| **Sugerir artistas** | O modelo propõe até 6 artistas para a vibe. Cada nome é **confirmado na GetSongBPM** (nome quase igual, senão é descartado, o que barra artista inventado) e só entra música com BPM e tom na GetSongBPM. | a mesma chave de IA |
 | **Embeddings de vibe** | Mede a proximidade de *significado* entre a frase e cada música (cosseno entre vetores) e entra com 35% na nota de vibe. Entende frases que não usam nenhuma palavra do léxico. | chave do Gemini ou do OpenRouter |
 | **Explicar a transição** | O botão **Explicar com IA** pede ao modelo 1–2 frases sobre por que a próxima faixa combina. A IA só reescreve os fatos que as regras já calcularam; sem IA, a frase sai das regras. | a mesma chave de IA |
 | **Aprender os pesos** | Cada aceite, curtida, salvamento e pulo vira um exemplo (vibe, BPM, tom, energia → gostou ou não). Uma **regressão logística** (Python puro, sem biblioteca) calibra o peso de cada critério. | nada (liga sozinha) |
@@ -87,7 +87,7 @@ O ranking continua sendo feito pelas regras e pela nota explicável. A IA propõ
 
 ## Créditos
 
-Dados de BPM e tom: [GetSongBPM](https://getsongbpm.com) (link exigido pela licença da API). Descoberta de músicas: Last.fm.
+Dados de músicas, BPM e tom: [GetSongBPM](https://getsongbpm.com) (link exigido pela licença da API). Não usa Last.fm.
 Fontes Barlow e Barlow Condensed (licença SIL OFL).
 
 Projeto da disciplina Tópicos Especiais · Professor: Érico Borgonove Cruz
@@ -99,17 +99,16 @@ Equipe: Kawan Silva do Nascimento, Rafael Mateus Viana, Raimundo de Souza
 
 ## Rodar localmente
 
-Requer Python 3.10+ e as chaves gratuitas do [Last.fm](https://www.last.fm/api/account/create) e da [GetSongBPM](https://getsongbpm.com/api).
+Requer Python 3.10+ e a chave gratuita da [GetSongBPM](https://getsongbpm.com/api).
 
 ```bash
 git clone https://github.com/SoulsBPM/SoulsBPM.git
 cd SoulsBPM
 pip install -r requirements.txt
 # crie um arquivo .env ao lado do app.py com:
-#   LASTFM_API_KEY=sua_chave
 #   GETSONGBPM_API_KEY=sua_chave
 python app.py               # http://localhost:5000
-python -m unittest discover -s tests -t .   # 383 testes
+python -m unittest discover -s tests -t .   # 382 testes
 ```
 
 No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e `python3`.
@@ -119,7 +118,7 @@ No Windows use `python -m pip` se o `pip` não for reconhecido; no Mac, `pip3` e
 
 | Variável | Para quê |
 |---|---|
-| `LASTFM_API_KEY`, `GETSONGBPM_API_KEY` | **Obrigatórias.** Sem elas o app não abre. |
+| `GETSONGBPM_API_KEY` | **Obrigatória.** Sem ela o app não abre. |
 | `GEMINI_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY` | Opcional: liga a IA de linguagem na busca (vale a primeira da lista; `SOULSBPM_IA_PROVEDOR` e `SOULSBPM_MODELO_IA` ajustam). |
 | `DATABASE_URL` | PostgreSQL (ex.: Neon). Sem ela, usa SQLite em `data/soulsbpm.db`. |
 | `SOULSBPM_IA_ARTISTAS` | Quantos artistas sugeridos pela IA entram por busca (padrão 3; `0` desliga). |
@@ -149,7 +148,7 @@ todos os visitantes juntos; o app para em 2500/h e passa a usar só o cache.
 ```
 app.py               servidor Flask (rotas, login, limites)
 soulsbpm/            engine (estados), dj (ranking), feedback, musicfinder, llm, sugestor, embeddings, narrador, aprendizado,
-                     aovivo/fontes (Last.fm e GetSongBPM), contas, store (SQLite/Postgres), limite
+                     aovivo/fontes (GetSongBPM), contas, store (SQLite/Postgres), limite
 static/              interface (index, login, app.js, CSS, fontes)
 tests/               testes automatizados (unittest)
 tools/               diagnósticos das APIs e importador de catálogo
@@ -184,4 +183,4 @@ tools/               diagnósticos das APIs e importador de catálogo
 
 ## Avaliar a qualidade das buscas
 
-`python tools/avaliar_buscas.py` roda 15 buscas por fonte (Last.fm por tag, artistas sugeridos pela IA e o combinado que o app mostra) e gera `avaliacao/avaliacao.csv`. Marque `s` ou `n` na coluna `boa` e rode `python tools/avaliar_buscas.py --resumo avaliacao/avaliacao.csv` para ver, por fonte, a porcentagem de músicas boas. Usa o cache da GetSongBPM, então repetir não gasta a cota.
+`python tools/avaliar_buscas.py` roda 15 buscas por fonte (músicas populares no BPM da vibe, artistas sugeridos pela IA e o combinado que o app mostra) e gera `avaliacao/avaliacao.csv`. Marque `s` ou `n` na coluna `boa` e rode `python tools/avaliar_buscas.py --resumo avaliacao/avaliacao.csv` para ver, por fonte, a porcentagem de músicas boas. Usa o cache da GetSongBPM, então repetir não gasta a cota.

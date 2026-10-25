@@ -31,14 +31,13 @@ RAIZ = pathlib.Path(__file__).resolve().parent
 ID_VALIDO = re.compile(r"^[A-Za-z0-9_-]{1,64}$")      # código de usuário: só letras, números, _ e -
 log = logging.getLogger("soulsbpm")
 
-MSG_SEM_CHAVES = """O SoulsBPM usa músicas reais e precisa de duas chaves gratuitas:
-  1. Last.fm:     https://www.last.fm/api/account/create   (LASTFM_API_KEY)
-  2. GetSongBPM:  https://getsongbpm.com/api               (GETSONGBPM_API_KEY)
-Copie o arquivo .env.exemplo para .env, cole as chaves nele e rode de novo: python app.py"""
+MSG_SEM_CHAVES = """O SoulsBPM usa músicas reais e precisa de uma chave gratuita da GetSongBPM:
+  https://getsongbpm.com/api   (GETSONGBPM_API_KEY)
+Copie o arquivo .env.exemplo para .env, cole a chave nele e rode de novo: python app.py"""
 
 
 class SemChaves(RuntimeError):
-    """Faltam as chaves LASTFM_API_KEY e/ou GETSONGBPM_API_KEY."""
+    """Falta a chave GETSONGBPM_API_KEY."""
 
 
 def carregar_env(arquivo=None):

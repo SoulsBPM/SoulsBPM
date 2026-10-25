@@ -3,32 +3,15 @@ import csv
 import pathlib
 import tempfile
 import unittest
-import urllib.parse
 
 from soulsbpm import musicfinder
-from soulsbpm.aovivo import AoVivo, LastFm
+from soulsbpm.aovivo import AoVivo
 from tools import avaliar_buscas as av
-from tests.test_aovivo import bpm_falso
+from tests.fakes import gsb_falso
 
 TAG = [(f"Tag Artista {i}", f"Tag Faixa {i}") for i in range(6)]
 IA_FAIXAS = [("Maré Alta", f"Faixa A{i}") for i in range(1, 4)]
 TABELA = {a_t: (70 + 2 * i, "Am") for i, a_t in enumerate(TAG + IA_FAIXAS)}
-
-
-def lastfm():
-    """Last.fm falso: tags devolvem TAG; só o artista "Maré Alta" existe; qualquer outro nome vira um impostor."""
-    def http(url):
-        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
-        m = q["method"][0]
-        if m == "tag.gettoptracks":
-            return {"tracks": {"track": [{"name": t, "artist": {"name": a}} for a, t in TAG]}}
-        if m == "artist.search":
-            nome = q["artist"][0]
-            return {"results": {"artistmatches": {"artist": [{"name": nome if nome == "Maré Alta" else "Zzz Outro"}]}}}
-        if m == "artist.gettoptracks":
-            return {"toptracks": {"track": [{"name": t} for a, t in IA_FAIXAS if a == q["artist"][0]]}}
-        return {}
-    return LastFm("k", http, pausa=0)
 
 
 class IA:
@@ -40,7 +23,7 @@ class IA:
 
 
 def provedor():
-    return AoVivo(lastfm(), bpm_falso(TABELA))
+    return AoVivo(gsb_falso(TABELA, impostor="Zzz Outro"))
 
 
 class TestGerar(unittest.TestCase):
@@ -65,7 +48,7 @@ class TestGerar(unittest.TestCase):
         self.assertEqual(list(linhas[0]), av.COLUNAS)
         ia = [l for l in linhas if l["fonte"] == "ia_artistas"]
         self.assertEqual({l["artista"] for l in ia}, {"Maré Alta"})            # o impostor foi barrado
-        tags = [l for l in linhas if l["fonte"] == "lastfm_tags"]
+        tags = [l for l in linhas if l["fonte"] == "por_tempo"]
         self.assertTrue(tags and all(l["artista"].startswith("Tag Artista") for l in tags))
         self.assertLessEqual(len([l for l in tags]), 5)                         # respeita o limite por busca
 
@@ -86,13 +69,12 @@ class TestGerar(unittest.TestCase):
             def completar(self, *a, **k):
                 raise RuntimeError("fora do ar")
         (arquivo, resumo), _ = self.rodar(["música calma para estudar à noite"], Quebrado())
-        self.assertIn("lastfm_tags", {l["fonte"] for l in self.linhas(arquivo)})
+        self.assertIn("por_tempo", {l["fonte"] for l in self.linhas(arquivo)})
 
     def test_conta_consultas_e_faixas_sem_bpm(self):
-        tabela_parcial = dict(list(TABELA.items())[:3])                           # só 3 faixas têm BPM
-        p = AoVivo(lastfm(), bpm_falso(tabela_parcial))
+        p = AoVivo(gsb_falso(TABELA, impostor="Zzz Outro", sem_tom=set(list(TABELA)[3:])))   # só 3 faixas têm BPM/tom
         (_, resumo), _ = self.rodar(["música calma para estudar à noite"], None, p)
-        r = resumo["lastfm_tags"]
+        r = resumo["por_tempo"]
         self.assertGreater(r["consultas_bpm"], 0)
         self.assertGreater(r["sem_bpm"], 0)
         self.assertLess(r["sem_bpm"], r["consultas_bpm"] + 1)
@@ -147,13 +129,13 @@ class TestResumo(unittest.TestCase):
         return arq
 
     def test_calcula_porcentagem_por_fonte_ignorando_em_branco(self):
-        arq = self.csv([("lastfm_tags", "A", "s"), ("lastfm_tags", "A", "n"), ("lastfm_tags", "B", "n"),
-                        ("lastfm_tags", "C", ""), ("ia_artistas", "D", "S"), ("ia_artistas", "E", "sim"),
+        arq = self.csv([("por_tempo", "A", "s"), ("por_tempo", "A", "n"), ("por_tempo", "B", "n"),
+                        ("por_tempo", "C", ""), ("ia_artistas", "D", "S"), ("ia_artistas", "E", "sim"),
                         ("ia_artistas", "E", "não")])
         r = {x["fonte"]: x for x in av.resumir(arq)}
-        self.assertEqual((r["lastfm_tags"]["marcadas"], r["lastfm_tags"]["boas"]), (3, 1))
-        self.assertEqual(r["lastfm_tags"]["pct_boas"], 33.3)
-        self.assertEqual(r["lastfm_tags"]["artistas_distintos"], 3)
+        self.assertEqual((r["por_tempo"]["marcadas"], r["por_tempo"]["boas"]), (3, 1))
+        self.assertEqual(r["por_tempo"]["pct_boas"], 33.3)
+        self.assertEqual(r["por_tempo"]["artistas_distintos"], 3)
         self.assertEqual(r["ia_artistas"]["pct_boas"], 66.7)
         self.assertEqual(r["ia_artistas"]["artistas_distintos"], 2)
 
@@ -166,7 +148,7 @@ class TestResumo(unittest.TestCase):
         self.assertTrue(any("Nenhuma música marcada" in s for s in saida))
 
     def test_poucas_marcacoes_geram_aviso_de_acaso(self):
-        arq = self.csv([("lastfm_tags", "A", "s"), ("ia_artistas", "B", "n")])
+        arq = self.csv([("por_tempo", "A", "s"), ("ia_artistas", "B", "n")])
         saida = []
         av.imprimir_resumo(av.resumir(arq), saida.append)
         self.assertTrue(any("menos de 20" in s for s in saida))
@@ -230,16 +212,6 @@ class TestEsperaDaIA(unittest.TestCase):
         resumo, _, pausas = self.rodar(IASequencia([None]), espera_ia=65.0)
         self.assertEqual(resumo["ia_artistas"]["erros"], 1)
         self.assertEqual(pausas.count(65.0), 1)                  # espera uma vez só, sem ficar em laço
-
-
-class TestGeneroPedidoNaoEhCortado(unittest.TestCase):
-    def test_genero_vem_antes_das_tags_mesmo_com_muitas_tags(self):
-        from soulsbpm.aovivo import TAG_LASTFM, GENERO_LASTFM
-        tags = {t: 5 - i for i, t in enumerate(list(TAG_LASTFM)[:6])}           # mais tags que o limite (4)
-        genero = next(iter(GENERO_LASTFM))
-        achadas = provedor().tags_da_busca({"tags": tags, "generos": [genero], "energia": None})
-        self.assertEqual(achadas[0][2], [genero])
-        self.assertLessEqual(len(achadas), 4)
 
 
 if __name__ == "__main__":

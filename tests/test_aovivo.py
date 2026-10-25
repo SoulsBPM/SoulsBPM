@@ -1,88 +1,73 @@
-"""Modo ao vivo sem rede: Last.fm e GetSongBPM simulados."""
+"""Modo ao vivo sem rede: GetSongBPM simulada (tests/fakes.py)."""
 import unittest
+import urllib.error
 
 from app import create_app
 from soulsbpm import musicfinder
-from soulsbpm.aovivo import AoVivo, LastFm, id_faixa
+from soulsbpm.aovivo import AoVivo, id_faixa
 from soulsbpm.engine import Motor
 from soulsbpm.fontes import Cache, FonteErro, GetSongBPM
 from soulsbpm.store import Store
-
-
-def lastfm_falso(por_tag):
-    def http(url):
-        for tag, faixas in por_tag.items():
-            if f"tag={tag.replace(' ', '+')}" in url:
-                return {"tracks": {"track": [{"name": t, "artist": {"name": a}} for a, t in faixas]}}
-        return {"tracks": {"track": []}}
-    return LastFm("k", http, pausa=0)
-
-
-def bpm_falso(tabela):
-    def http(url):
-        for (a, t), (bpm, tom) in tabela.items():
-            if f"song%3A{t.replace(' ', '+')}" in url:
-                return {"search": [{"id": "1", "title": t, "tempo": str(bpm), "key_of": tom, "artist": {"name": a}}]}
-        return {"search": []}
-    return GetSongBPM("k", Cache(), http, pausa=0)
-
+from tests.fakes import gsb_falso
 
 FAIXAS_CHILL = [("Artista %d" % i, "Faixa %d" % i) for i in range(10)]
 TABELA = {a_t: (70 + 2 * i, "Am") for i, a_t in enumerate(FAIXAS_CHILL)}
 
 
-def provedor():
-    return AoVivo(lastfm_falso({"chill": FAIXAS_CHILL, "night": FAIXAS_CHILL[:4], "study": FAIXAS_CHILL[2:7],
-                                "focus": FAIXAS_CHILL[:3]}), bpm_falso(TABELA))
+def provedor(tabela=None, **kw):
+    return AoVivo(gsb_falso(tabela or TABELA, **kw))
 
 
 class TraducaoTests(unittest.TestCase):
-    def test_tags_da_busca(self):
-        interp = musicfinder.interpretar("música calma para estudar à noite")
-        tags = [t[0] for t in provedor().tags_da_busca(interp)]
-        self.assertIn("chill", tags)
-        self.assertLessEqual(len(tags), 4)
-
-    def test_genero_vira_tag(self):
-        interp = musicfinder.interpretar("jazz")
-        self.assertEqual(provedor().tags_da_busca(interp)[0][0], "jazz")
+    def test_bpm_alvo_segue_a_energia(self):
+        lento, rapido = {"energia": 0.2}, {"energia": 0.8}
+        self.assertLess(AoVivo.bpm_alvo(lento), AoVivo.bpm_alvo(rapido))
+        self.assertIsNone(AoVivo.bpm_alvo({"energia": None}))
+        self.assertEqual(AoVivo.bpm_alvo({"energia": 0.0}), 60)           # nunca sai da faixa útil
+        self.assertLessEqual(AoVivo.bpm_alvo({"energia": 1.0}), 170)
 
     def test_id_estavel(self):
         self.assertEqual(id_faixa("Daft Punk", "One More Time"), id_faixa("daft  punk", "ONE MORE TIME"))
 
 
-class LastFmTests(unittest.TestCase):
-    def test_erro_de_chave(self):
+class GetSongBPMTests(unittest.TestCase):
+    def test_chave_recusada(self):
+        def http(url):
+            raise urllib.error.HTTPError(url, 403, "x", {}, None)
         with self.assertRaises(FonteErro):
-            LastFm("k", lambda u: {"error": 10, "message": "Invalid API key"}, pausa=0).top_tracks("chill")
-
-    def test_tag_inexistente_nao_e_erro(self):
-        self.assertEqual(LastFm("k", lambda u: {"error": 6, "message": "x"}, pausa=0).top_tracks("zzz"), [])
+            GetSongBPM("k", Cache(), http, pausa=0).por_tempo(120)
 
     def test_resposta_estranha(self):
-        for lixo in ({}, [], {"tracks": None}, {"tracks": {"track": ["x", 1]}}):
-            self.assertEqual(LastFm("k", lambda u, l=lixo: l, pausa=0).top_tracks("t"), [])
+        for lixo in ({}, [], {"search": None}, {"search": ["x", 1]}, {"tempo": [{"artist": 3}]}):
+            g = GetSongBPM("k", Cache(), lambda u, l=lixo: l, pausa=0)
+            self.assertEqual(g.procurar("x"), [])
+            self.assertEqual(g.por_tempo(100), [])
+            self.assertIsNone(g.buscar_artista("x"))
+            self.assertEqual(g.faixas_do_artista("x"), [])
 
     def test_sem_chave(self):
         with self.assertRaises(FonteErro):
-            LastFm("")
+            GetSongBPM("")
 
 
 class AoVivoTests(unittest.TestCase):
     def test_candidatas_formato_do_app(self):
-        interp = musicfinder.interpretar("música calma para estudar à noite")
-        faixas = provedor().candidatas(interp)
+        faixas = provedor().candidatas(musicfinder.interpretar("música calma para estudar à noite"))
         self.assertTrue(faixas)
         for f in faixas:
             for campo in ("id", "titulo", "artista", "bpm", "tom", "energia", "generos", "tags", "duracao"):
                 self.assertIn(campo, f)
-        self.assertEqual(len({f["id"] for f in faixas}), len(faixas))     # sem repetição entre tags
+        self.assertEqual(len({f["id"] for f in faixas}), len(faixas))
+
+    def test_vibe_sem_energia_nao_chuta(self):
+        self.assertEqual(provedor().candidatas({"energia": None, "tags": {}, "generos": []}), [])
 
     def test_faixa_sem_bpm_e_descartada(self):
-        p = AoVivo(lastfm_falso({"chill": [("X", "Sem Dados")] + FAIXAS_CHILL[:3]}), bpm_falso(TABELA))
+        tabela = {**TABELA, ("X", "Sem Dados"): (73, "Am")}
+        p = provedor(tabela, sem_tom={("X", "Sem Dados")})
         faixas = p.candidatas(musicfinder.interpretar("música calma"))
+        self.assertTrue(faixas)
         self.assertNotIn("Sem Dados", [f["titulo"] for f in faixas])
-        self.assertEqual(len(faixas), 3)
 
     def test_busca_pelo_app_sem_lista_pronta_e_modo_dj(self):
         app = create_app(":memory:", provedor=provedor())
@@ -92,10 +77,10 @@ class AoVivoTests(unittest.TestCase):
         r = c.post("/api/search", json={"user_id": "u", "text": "música calma para estudar à noite"}).get_json()
         self.assertEqual(r["estado"], "resultados")
         self.assertTrue(all(x["id"].startswith("l") for x in r["resultados"]))
-        sid = r["session_id"]
-        d = c.post(f"/api/session/{sid}/play", json={"user_id": "u", "track_id": r["resultados"][0]["id"]}).get_json()
+        d = c.post(f"/api/session/{r['session_id']}/play",
+                   json={"user_id": "u", "track_id": r["resultados"][0]["id"]}).get_json()
         self.assertEqual(d["estado"], "sugerindo_proxima")
-        self.assertGreater(app.motor.store.load_tracks().__len__(), 0)           # faixas guardadas no banco
+        self.assertGreater(len(app.motor.store.load_tracks()), 0)                # faixas guardadas no banco
 
     def test_falha_da_fonte_nao_derruba_a_busca(self):
         class Quebrado:
@@ -112,50 +97,26 @@ class AoVivoTests(unittest.TestCase):
         m1.buscar("u", "música calma para estudar à noite")
         n = len(m1.catalogo)
         self.assertGreater(n, 0)
-        m2 = Motor([], store, provedor=provedor())
-        self.assertEqual(len(m2.catalogo), n)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        self.assertEqual(len(Motor([], store, provedor=provedor()).catalogo), n)
 
 
 class ErroRealApareceTests(unittest.TestCase):
     def test_chave_da_getsongbpm_recusada_mostra_o_motivo(self):
-        import urllib.error
         def http(url):
             raise urllib.error.HTTPError(url, 403, "x", {}, None)
-        p = AoVivo(lastfm_falso({"chill": FAIXAS_CHILL}), GetSongBPM("k", Cache(), http, pausa=0))
-        app = create_app(":memory:", provedor=p)
+        app = create_app(":memory:", provedor=AoVivo(GetSongBPM("k", Cache(), http, pausa=0)))
         r = app.test_client().post("/api/search", json={"user_id": "u", "text": "música calma"}).get_json()
         self.assertEqual(r["estado"], "sem_resultados")
         self.assertIn("recusada", r["aviso"])
 
 
-def lastfm_artistas(top, similares, oficial="Calvin Harris"):
-    """Last.fm falso para busca por artista: artist.search / gettoptracks / getsimilar."""
-    def http(url):
-        if "method=artist.search" in url:
-            return {"results": {"artistmatches": {"artist": [{"name": oficial}]}}}
-        if "method=artist.getsimilar" in url:
-            return {"similarartists": {"artist": [{"name": n} for n in similares]}}
-        if "method=artist.gettoptracks" in url:
-            for nome, titulos in top.items():
-                if f"artist={nome.replace(' ', '+')}&" in url:
-                    return {"toptracks": {"track": [{"name": t, "artist": {"name": nome}} for t in titulos]}}
-            return {"toptracks": {"track": []}}
-        return {}
-    return LastFm("k", http, pausa=0)
-
-
-TOP = {"Calvin Harris": ["Summer", "Feel So Close", "Outside"], "David Guetta": ["Titanium", "Memories"]}
 TAB_ART = {("Calvin Harris", "Summer"): (128, "Am"), ("Calvin Harris", "Feel So Close"): (128, "Cm"),
            ("Calvin Harris", "Outside"): (128, "Gm"), ("David Guetta", "Titanium"): (126, "Dm"),
            ("David Guetta", "Memories"): (130, "Am")}
 
 
 def prov_artista():
-    return AoVivo(lastfm_artistas(TOP, ["David Guetta"]), bpm_falso(TAB_ART))
+    return AoVivo(gsb_falso(TAB_ART, similares={"Calvin Harris": ["David Guetta"]}))
 
 
 class ArtistaTests(unittest.TestCase):
@@ -182,9 +143,13 @@ class ArtistaTests(unittest.TestCase):
         self.assertIsNotNone(d["sugerida"])
 
     def test_frase_solta_so_vira_artista_se_o_nome_bater(self):
-        app = create_app(":memory:", provedor=prov_artista())
+        app = create_app(":memory:", provedor=AoVivo(gsb_falso(TAB_ART, impostor="Zzz Outro")))
         c = app.test_client()
         r = c.post("/api/search", json={"user_id": "u", "text": "calvin harris"}).get_json()
         self.assertEqual(r["estado"], "resultados")
         r2 = c.post("/api/search", json={"user_id": "u", "text": "asdf qwer"}).get_json()   # não é artista
         self.assertEqual(r2["estado"], "inicio")
+
+
+if __name__ == "__main__":
+    unittest.main()

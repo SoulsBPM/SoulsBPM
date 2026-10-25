@@ -91,7 +91,7 @@ def relevancia(consulta: str, titulo: str, artista: str = "") -> float:
 
 
 def destaques_no_catalogo(catalogo: list, texto: str, limite: int = 3, minimo: float = 0.7) -> dict:
-    """{id: 1,0} das faixas do catálogo cujo título/artista combinam com o texto (catálogo de amostra, sem Last.fm)."""
+    """{id: 1,0} das faixas do catálogo cujo título/artista combinam com o texto (catálogo de amostra, sem GetSongBPM)."""
     pontuadas = sorted(((relevancia(texto, f["titulo"], f["artista"]), f["id"]) for f in catalogo), key=lambda x: (-x[0], x[1]))
     return {i: 1.0 for s, i in pontuadas[:limite] if s >= minimo}
 
@@ -112,7 +112,7 @@ _RE_ARTISTA = re.compile(r"^(?:.*?\b)?(?:" + "|".join(_PREFIXOS_ARTISTA) + r")\s
 
 def extrair_artista(texto: str):
     """Nome de artista citado de forma explícita ("tipo Calvin Harris", "músicas do Coldplay"). None se não houver.
-    É só um candidato: o modo ao vivo confirma no Last.fm antes de usar."""
+    É só um candidato: o modo ao vivo confirma no GetSongBPM antes de usar."""
     t = re.sub(r"\s+", " ", (texto or "").strip().strip("\"'“”.!?"))
     m = _RE_ARTISTA.match(t)
     if not m:
@@ -128,7 +128,7 @@ def extrair_artista(texto: str):
 
 
 def candidato_artista(texto: str, clara: bool):
-    """Explícito ("tipo X") ou, quando a vibe não foi entendida, a frase curta inteira (confirmada depois no Last.fm)."""
+    """Explícito ("tipo X") ou, quando a vibe não foi entendida, a frase curta inteira (confirmada depois no GetSongBPM)."""
     nome = extrair_artista(texto)
     if nome:
         return nome, True

@@ -256,7 +256,7 @@ class Motor:
         s.sugerida = self._melhor(s, self._atual(s))
 
     def _busca_artista(self, texto, interp):
-        """Se o texto cita um artista ("tipo Calvin Harris", "Coldplay"), confirma no Last.fm e troca a vibe por
+        """Se o texto cita um artista ("tipo Calvin Harris", "Coldplay"), confirma na GetSongBPM e troca a vibe por
         'músicas dele + de artistas parecidos'. Devolve um aviso se a fonte falhou, senão None."""
         if not (self.provedor and hasattr(self.provedor, "candidatas_artista")):
             return None
@@ -282,7 +282,7 @@ class Motor:
         try:
             if self.provedor and hasattr(self.provedor, "candidatas_musica"):
                 ident = None
-                if self.ia is not None and not interp["clara"]:         # letra/frase solta: a IA palpita, o Last.fm confirma
+                if self.ia is not None and not interp["clara"]:         # letra/frase solta: a IA palpita, a GetSongBPM confirma
                     ident = lambda t: sugestor.identificar_musica(self.ia, t)
                 r = self.provedor.candidatas_musica(texto, ident)
                 if r:
@@ -311,7 +311,7 @@ class Motor:
         return self._pool_ia.submit(sugestor.sugerir, self.ia, texto)
 
     def _faixas_dos_artistas_ia(self, sugestao, interp):
-        """Faixas dos artistas sugeridos, já confirmados no Last.fm e com BPM/tom. Vazio se algo falhar."""
+        """Faixas dos artistas sugeridos, já confirmados na GetSongBPM e com BPM/tom. Vazio se algo falhar."""
         if sugestao is None:
             return []
         try:
@@ -364,7 +364,7 @@ class Motor:
                     "exemplos": musicfinder.EXEMPLOS}
         perfil, tags = self.perfil(user_id), list(interp["tags"])
         if self.provedor and interp.get("pontos") is None:             # modo ao vivo: traz faixas reais da vibe
-            sugestao = self._pedir_artistas_ia(texto)                  # a IA pensa enquanto o Last.fm responde
+            sugestao = self._pedir_artistas_ia(texto)                  # a IA pensa enquanto a GetSongBPM responde
             achadas = []
             try:
                 achadas = list(self.provedor.candidatas(interp))

@@ -129,6 +129,7 @@ class GetSongBPM:
         self._http, self.pausa, self.tentativas = http or self._http_real, pausa, tentativas
         self.limite_hora = limite_hora or self.LIMITE_HORA
         self._envios, self._trava = [], threading.Lock()
+        self._ids_artista = {}                                   # slug do artista → id na GetSongBPM
 
     def _reservar(self):
         agora = time.time()
@@ -204,22 +205,71 @@ class GetSongBPM:
         self.cache.put(k, resultado)
         return resultado
 
-    def procurar(self, texto, limite=10):
-        """[(artista, título)] que a própria GetSongBPM acha para o texto (nome da música, ou "música artista").
-        O BPM e o tom que vierem na busca já ficam no cache, então não custa outra consulta depois."""
-        r = self._get("/search/", type="song", lookup=texto, limit=limite)
+    # -- descoberta (a GetSongBPM também acha músicas e artistas, não só o BPM) -------------
+    @staticmethod
+    def _itens(r, chave):
+        v = r.get(chave) if isinstance(r, dict) else None
+        if isinstance(v, dict):
+            v = [v]
+        return [x for x in (v or []) if isinstance(x, dict)]
+
+    def _par(self, item):
+        """(artista, título) de um item de busca/tempo; guarda BPM e tom no cache quando a busca já os traz."""
+        t = item.get("title") or item.get("song_title")
+        art = item.get("artist")
+        a = art.get("name") if isinstance(art, dict) else None
+        if not (isinstance(t, str) and t and isinstance(a, str) and a):
+            return None
+        dados = self._normaliza(item)
+        if dados:
+            self.cache.put(f"{_slug(a)}|{_slug(t)}", dados)
+        return a, t
+
+    def procurar(self, texto, limite=10, artista=None):
+        """[(artista, título)] que a GetSongBPM acha pelo nome da música (com `artista`, só dele)."""
+        if artista:
+            r = self._get("/search/", type="both", lookup=f"song:{texto} artist:{artista}", limit=limite)
+        else:
+            r = self._get("/search/", type="song", lookup=texto, limit=limite)
+        return list(dict.fromkeys(p for p in map(self._par, self._itens(r, "search")) if p))
+
+    def buscar_artista(self, nome):
+        """Nome oficial do artista mais parecido com o texto (None se não achar). Guarda o id para consultas seguintes."""
+        r = self._get("/search/", type="artist", lookup=nome, limit=3)
+        for item in self._itens(r, "search"):
+            if isinstance(item.get("name"), str) and item["name"]:
+                if item.get("id") is not None:
+                    self._ids_artista[_slug(item["name"])] = item["id"]
+                return item["name"]
+        return None
+
+    def faixas_do_artista(self, artista, limite=15):
+        """[(artista, título)] de músicas desse artista que a GetSongBPM conhece."""
+        alvo = _slug(artista)
         saida = []
-        for item in (r.get("search") or []) if isinstance(r, dict) else []:
-            if not isinstance(item, dict) or not isinstance(item.get("title"), str) or not isinstance(item.get("artist"), dict):
-                continue
-            a, t = item["artist"].get("name"), item["title"]
-            if not isinstance(a, str) or not a or not t:
-                continue
-            dados = self._normaliza(item)
-            if dados:
-                self.cache.put(f"{_slug(a)}|{_slug(t)}", dados)
-            saida.append((a, t))
-        return list(dict.fromkeys(saida))
+        for r in (self._get("/search/", type="both", lookup=f"artist:{artista}", limit=limite),
+                  self._get("/search/", type="song", lookup=artista, limit=limite)):
+            for item in self._itens(r, "search"):
+                par = self._par(item)
+                if par and _slug(par[0]) == alvo:
+                    saida.append(par)
+            if saida:
+                break
+        return list(dict.fromkeys(saida))[:limite]
+
+    def artistas_similares(self, artista, limite=4):
+        if _slug(artista) not in self._ids_artista and not self.buscar_artista(artista):
+            return []
+        r = self._get("/artist/", id=self._ids_artista[_slug(artista)])
+        bloco = r.get("artist") if isinstance(r, dict) else None
+        lista = bloco.get("similar") if isinstance(bloco, dict) else None
+        nomes = [x.get("name") if isinstance(x, dict) else x for x in (lista or [])]
+        return [n for n in nomes if isinstance(n, str) and n][:limite]
+
+    def por_tempo(self, bpm, limite=12):
+        """[(artista, título)] das músicas populares com esse BPM."""
+        r = self._get("/tempo/", bpm=int(bpm), limit=limite)
+        return list(dict.fromkeys(p for p in map(self._par, self._itens(r, "tempo")) if p))
 
 
 def montar_faixa(idx, artista, titulo, dados, generos=(), tags=(), energia=None, duracao=None):
